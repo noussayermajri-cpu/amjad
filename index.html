@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>الأمجاد – بنين</title>
+  <meta name="description" content="تطبيق مدارس الأمجاد العالمية – قسم البنين: رصد الغياب والسلوك ومتابعة المعلمين">
+  <meta name="theme-color" content="#1A9BD7">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="الأمجاد">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" id="brand">
+      <div class="logo-box">AL-AMJAD</div>
+      <div class="brand-text">
+        <div class="ar">مدارس الأمجاد العالمية</div>
+        <div class="en">AL-AMJAD INTERNATIONAL SCHOOLS · <i>Learning for the life</i></div>
+      </div>
+    </div>
+    <button id="installBtn" class="btn small ghost hidden" type="button">⬇ تثبيت</button>
+  </header>
+  <div id="netbar" class="netbar hidden"></div>
+  <main id="app" aria-live="polite"><div class="loading">جارٍ التحميل…</div></main>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
