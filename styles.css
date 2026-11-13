@@ -130,3 +130,13 @@ table.sheet.pro td.act{white-space:nowrap;width:1%}
 .datebar{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-right:5px solid var(--green);border-radius:12px;padding:8px 12px;margin:8px 0}
 .datebar label{font-weight:800;color:var(--green-d);white-space:nowrap}
 .datebar select{flex:1;padding:10px;font-size:16px}
+
+/* إشعارات */
+.tile{position:relative}
+.tile.alert{border-color:#e9a8a8;border-right-color:#d32f2f;background:#fff4f4}
+.tile.alert small{color:#c62828;font-weight:700}
+.badge{position:absolute;top:-9px;left:-9px;min-width:28px;height:28px;padding:0 7px;border-radius:999px;background:#d32f2f;color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px #fff;line-height:1}
+.badge.in{position:static;display:inline-flex;min-width:24px;height:24px;font-size:13px;box-shadow:none;margin-left:6px}
+.card.alerts{border:1px solid #f1c0c0;border-right:6px solid #d32f2f;background:#fff8f8}
+.card.alerts a{display:flex;align-items:center;padding:8px 0;color:#b71c1c;text-decoration:none;font-weight:600;border-top:1px solid #f6dede}
+.card.alerts a:first-of-type{margin-top:8px}

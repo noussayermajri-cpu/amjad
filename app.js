@@ -147,7 +147,7 @@
     var u = state.user || {}, m = state.menu || { forms: [], views: [] };
     var html = '<div class="card userline"><div><b>' + esc(u.name || u.email) + '</b><div class="muted" dir="ltr" style="text-align:right">' + esc(u.email) + '</div></div>' +
       '<div><span class="role">' + esc(u.roleLabel || '') + '</span> <button id="out" class="btn small ghost">خروج</button></div></div>';
-    html += '<div id="kpis"></div>';
+    html += '<div id="alerts"></div><div id="kpis"></div>';
     if (m.forms.length) {
       html += '<h2>الإدخال</h2><div class="grid">' + m.forms.map(function (f) {
         return '<a class="tile form" href="#/form/' + f.key + '">' + esc(f.title) + '<small>' + formHint(f.key) + '</small></a>';
@@ -157,17 +157,49 @@
     m.views.forEach(function (v) { (groups[v.group] = groups[v.group] || []).push(v); });
     Object.keys(groups).forEach(function (g) {
       html += '<h2>' + esc(g) + '</h2><div class="grid">' + groups[g].map(function (v) {
-        return '<a class="tile" href="#/view/' + v.key + '">' + esc(v.title) + '<small>عرض فقط</small></a>';
+        return '<a class="tile" id="t_' + v.key + '" href="#/view/' + v.key + '">' + esc(v.title) + '<small>عرض فقط</small></a>';
       }).join('') + '</div>';
     });
     if (outbox().length) html += '<h2>بانتظار الإرسال</h2><a class="tile" href="#/outbox">📤 ' + outbox().length + ' إدخال محفوظ في الجهاز</a>';
     h(html);
     document.getElementById('out').onclick = function () { if (confirm('تسجيل الخروج من هذا الجهاز؟')) logout(); };
     var cached = get('home', null); if (cached) renderKpis(cached);
-    if (m.views.length) api('home').then(function (j) { set('home', j.home); renderKpis(j.home); }).catch(function (e) { if (e.auth) logout(true); });
+    refreshHome();
+  }
+  function refreshHome() {
+    var m = state.menu || { views: [] };
+    if (!m.views.length || !state.token) return;
+    api('home').then(function (j) { set('home', j.home); renderKpis(j.home); }).catch(function (e) { if (e.auth) logout(true); });
+  }
+  // تحديث الإشعارات عند الرجوع للتطبيق وكل دقيقتين أثناء فتح الرئيسية
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && /^#\/(home)?$/.test(location.hash || '#/home')) refreshHome();
+  });
+  setInterval(function () {
+    if (document.visibilityState === 'visible' && /^#\/(home)?$/.test(location.hash || '#/home')) refreshHome();
+  }, 120000);
+  function renderBadges(home) {
+    var b = (home && home.badges) || {}, total = 0, items = [];
+    Object.keys(b).forEach(function (k) {
+      var n = Number(b[k].n) || 0; total += n;
+      var t = document.getElementById('t_' + k); if (!t) return;
+      var old = t.querySelector('.badge'); if (old) old.remove();
+      t.classList.toggle('alert', n > 0);
+      var sm = t.querySelector('small');
+      if (n > 0) {
+        t.insertAdjacentHTML('afterbegin', '<span class="badge" aria-label="' + n + ' ' + esc(b[k].label) + '">' + (n > 99 ? '99+' : n) + '</span>');
+        if (sm) sm.textContent = n + ' ' + b[k].label;
+        items.push('<a href="#/view/' + k + '"><span class="badge in">' + n + '</span> ' + esc(b[k].label) + '</a>');
+      } else if (sm) sm.textContent = 'لا يوجد ما يحتاج متابعة ✓';
+    });
+    var box = document.getElementById('alerts');
+    if (box) box.innerHTML = total ? '<div class="card alerts"><b>🔔 يحتاج متابعتك (' + total + ')</b>' + items.join('') + '</div>' : '';
+    try { if (navigator.setAppBadge) { total ? navigator.setAppBadge(total) : navigator.clearAppBadge(); } } catch (e) {}
+    try { document.title = (total ? '(' + total + ') ' : '') + document.title.replace(/^\(\d+\) /, ''); } catch (e) {}
   }
   function formHint(k) { return { absence: 'الغائبون والمتأخرون والمستأذنون', behavior: 'مشكلة سلوكية أو سلوك متميز', violation: 'مساءلة إدارية' }[k] || ''; }
   function renderKpis(home) {
+    renderBadges(home);
     var el = document.getElementById('kpis'); if (!el || !home) return;
     el.innerHTML = (home.cards || []).map(function (c) {
       return '<div class="card"><b>' + esc(c.title) + '</b><div class="kpis" style="margin-top:8px">' + c.items.map(function (i) {
