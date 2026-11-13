@@ -502,7 +502,7 @@
         var s = iso(x); seen[s] = 1; opts.push(s);
       }
       if (d.value && !seen[d.value]) opts.unshift(d.value);
-      return '<div class="datebar"><label for="dsel">📅 تاريخ التقرير</label><select id="dsel"><option value="today"' + (d.auto ? ' selected' : '') + '>اليوم (يتحدث تلقائياً)</option>' +
+      return '<div class="datebar"><label for="dsel">📅 تاريخ التقرير</label><select id="dsel"><option value="today"' + (d.auto ? ' selected' : '') + '>آخر يوم دراسي (تلقائي)</option>' +
         opts.map(function (s) { return '<option value="' + s + '"' + (!d.auto && s === d.value ? ' selected' : '') + '>' + lab(s) + '</option>'; }).join('') + '</select></div>';
     }
     function toISO(t) { var m = String(t).match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : ''; }

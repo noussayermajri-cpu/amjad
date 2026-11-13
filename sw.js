@@ -1,5 +1,5 @@
 // عامل الخدمة: يحفظ واجهة التطبيق لتفتح بسرعة وبدون إنترنت. لا يخزن أي بيانات طلاب أو معلمين.
-var CACHE = 'amjad-shell-v6';
+var CACHE = 'amjad-shell-v7';
 var SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'config.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/logo.png'];
 
