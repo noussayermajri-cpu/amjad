@@ -166,10 +166,12 @@
     var cached = get('home', null); if (cached) renderKpis(cached);
     refreshHome();
   }
+  var homeSeq = 0;
   function refreshHome() {
     var m = state.menu || { views: [] };
     if (!m.views.length || !state.token) return;
-    api('home').then(function (j) { set('home', j.home); renderKpis(j.home); }).catch(function (e) { if (e.auth) logout(true); });
+    var seq = ++homeSeq;
+    api('home').then(function (j) { if (seq !== homeSeq) return; set('home', j.home); renderKpis(j.home); }).catch(function (e) { if (e.auth) logout(true); });
   }
   // تحديث الإشعارات عند الرجوع للتطبيق وكل دقيقتين أثناء فتح الرئيسية
   document.addEventListener('visibilitychange', function () {
@@ -180,6 +182,8 @@
   }, 120000);
   function renderBadges(home) {
     var b = (home && home.badges) || {}, total = 0, items = [];
+    Array.prototype.forEach.call(document.querySelectorAll('.tile .badge'), function (x) { x.remove(); });
+    Array.prototype.forEach.call(document.querySelectorAll('.tile.alert'), function (x) { x.classList.remove('alert'); var sm = x.querySelector('small'); if (sm) sm.textContent = 'عرض فقط'; });
     Object.keys(b).forEach(function (k) {
       var n = Number(b[k].n) || 0; total += n;
       var t = document.getElementById('t_' + k); if (!t) return;
