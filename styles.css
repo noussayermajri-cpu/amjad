@@ -77,3 +77,52 @@ table.sheet a{color:var(--blue-d);font-weight:700;text-decoration:none;white-spa
 .outbox-item{display:flex;justify-content:space-between;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding:8px 0;font-size:14px}
 .outbox-item:last-child{border:0}
 @media (min-width:700px){ body{font-size:16px} }
+
+/* ===== لوحات المتابعة (عرض احترافي + تعديل) ===== */
+body.wide main{max-width:1280px}
+.vhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.vhead h1{margin-bottom:4px}
+.lead{color:var(--muted);font-size:14px;margin-bottom:6px}
+.vtools{display:flex;gap:8px}
+.small{font-size:13px}
+details.hint{background:var(--blue-l);border-radius:12px;padding:8px 14px;margin:8px 0;font-size:14px}
+details.hint summary{cursor:pointer;font-weight:700;color:var(--blue-d)}
+details.hint p{margin:6px 0;white-space:pre-line}
+h2.sub{font-size:16px;color:var(--blue-d);border-right:4px solid var(--green);padding-right:8px;margin:22px 0 6px}
+.infoline{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:8px 0;font-weight:700}
+.kpis.big{margin:10px 0}
+.kpis.big .kpi{background:#fff;border:1px solid var(--line);border-top:4px solid var(--blue)}
+.tcount{font-size:13px;color:var(--muted);margin:12px 2px 4px}
+.tablewrap.pro{max-height:none;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+table.sheet.pro{font-size:14.5px}
+table.sheet.pro thead th{position:sticky;top:0;background:var(--blue);color:#fff;font-weight:700;padding:10px;text-align:right;white-space:nowrap;z-index:1}
+table.sheet.pro td{border:0;border-bottom:1px solid #eef2f4;padding:10px;min-width:84px;max-width:280px;line-height:1.5}
+table.sheet.pro tr.data:hover td{background:var(--blue-l)}
+table.sheet.pro td.act{white-space:nowrap;width:1%}
+.emptyrow{text-align:center;color:var(--ok);padding:22px!important;font-weight:700}
+.chip{display:inline-block;border-radius:20px;padding:2px 10px;font-size:13px;font-weight:700;background:#eef2f4;color:#3c4a54;white-space:nowrap}
+.chip.ok{background:#e3f4ea;color:#1f7a47}.chip.warn{background:#fff1d9;color:#8a5300}.chip.bad{background:#fde7e5;color:#a8322a}
+.linkbtn{display:inline-block;background:var(--green-l);color:var(--green-d)!important;border-radius:9px;padding:5px 10px;white-space:nowrap}
+@media (max-width:760px){
+  table.sheet.pro thead{display:none}
+  table.sheet.pro,table.sheet.pro tbody,table.sheet.pro tr,table.sheet.pro td{display:block;width:100%;max-width:none}
+  .tablewrap.pro{border:0;background:transparent;box-shadow:none;overflow:visible}
+  table.sheet.pro tr.data{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-right:5px solid var(--blue);border-radius:14px;margin:0 0 10px;padding:8px 12px}
+  table.sheet.pro td{border:0;padding:4px 0;display:flex;gap:10px;justify-content:space-between}
+  table.sheet.pro td::before{content:attr(data-label);color:var(--muted);font-size:13px;flex:0 0 40%}
+  table.sheet.pro tr.data td:not(.act):first-of-type, table.sheet.pro td.act + td{font-weight:800;color:var(--blue-d)}
+  table.sheet.pro td.empty{display:none}
+  table.sheet.pro td.act{display:block;width:100%;padding-top:8px;order:99}
+  table.sheet.pro td.act::before{content:none}
+  table.sheet.pro td.act .btn{width:100%;padding:11px}
+}
+.overlay{position:fixed;inset:0;background:rgba(20,30,38,.45);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheetbox{background:var(--bg);width:100%;max-width:640px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden}
+@media (min-width:700px){.overlay{align-items:center}.sheetbox{border-radius:18px}}
+.sheethead{display:flex;justify-content:space-between;align-items:center;background:var(--blue);color:#fff;padding:12px 16px;font-size:17px}
+.sheethead .x{background:none;border:0;color:#fff;font-size:20px;cursor:pointer}
+.sheetbody{overflow:auto;padding:12px 16px}
+.sheetbox .actions{position:static;background:#fff;padding:10px 16px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.kvs{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:6px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed #edf1f3;font-size:14px}
+.kv:last-child{border:0}.kv span{color:var(--muted)}.kv b{text-align:left;white-space:pre-wrap}

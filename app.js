@@ -418,40 +418,130 @@
   function viewSheet(key) {
     var meta = (state.menu.views || []).filter(function (v) { return v.key === key; })[0];
     if (!meta) { location.hash = '#/home'; return; }
-    var draw = function (v, note) {
-      var html = '<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button><h1>' + esc(v.title) + '</h1>' +
-        '<div class="toolbar"><input type="search" id="q" placeholder="🔎 بحث في اللوحة…"><button class="btn small ghost" id="ref">↻ تحديث</button>' +
-        (meta.url ? '<a class="btn small ghost" target="_blank" rel="noopener" href="' + esc(meta.url) + '">فتح الملف</a>' : '') + '</div>' +
-        '<div class="muted">' + (note || ('آخر تحديث: ' + esc(fmtTime(v.updatedAt)))) + '</div>' +
-        '<div class="tablewrap"><table class="sheet"><tbody>' + v.rows.map(function (r) {
-          return '<tr>' + r.map(function (c) {
-            if (c && typeof c === 'object') return '<td><a href="' + esc(c.l) + '" target="_blank" rel="noopener">' + esc(c.t || 'فتح') + '</a></td>';
-            return '<td>' + esc(c) + '</td>';
-          }).join('') + '</tr>';
-        }).join('') + '</tbody></table></div>';
+    var back = '<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button>';
+    var V = null;
+    function txt(c) { return c && typeof c === 'object' ? (c.t || '') : String(c == null ? '' : c); }
+    function tone(t) {
+      if (/^(✅|✓|✔|🏁)|مغلق|تم /.test(t)) return 'ok';
+      if (/^(⏳|🔁|📞|👤|👥|🗣)|بانتظار|مفتوح|قيد|متابعة/.test(t)) return 'warn';
+      if (/^(❌|⚠|🔴|⛔)|إنذار|فصل/.test(t)) return 'bad';
+      return '';
+    }
+    function cellHtml(c, head) {
+      if (c && typeof c === 'object') return '<a class="linkbtn" href="' + esc(c.l) + '" target="_blank" rel="noopener">' + esc(c.t || 'فتح') + '</a>';
+      var t = String(c == null ? '' : c);
+      if (t && /الحالة|تنبيه|القرار|قرار/.test(head) && t.length < 60) { var k = tone(t); if (k || /^\W/.test(t)) return '<span class="chip ' + k + '">' + esc(t) + '</span>'; }
+      return esc(t);
+    }
+    function kpiTiles(sec) {
+      return '<div class="kpis big">' + sec.header.map(function (h, i) {
+        return '<div class="kpi"><b>' + cellHtml(sec.rows[0].cells[i], '') + '</b><span>' + esc(h.t) + '</span></div>';
+      }).join('') + '</div>';
+    }
+    function tableHtml(sec, si) {
+      var heads = sec.header.map(function (h) { return txt(h.t); });
+      var html = '<div class="tcount">' + sec.rows.length + ' سجل</div><div class="tablewrap pro"><table class="sheet pro"><thead><tr>' + (sec.edit ? '<th>إجراء</th>' : '') +
+        heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
+      if (!sec.rows.length) html += '<tr><td colspan="' + (heads.length + 1) + '" class="emptyrow">لا توجد سجلات حالياً ✓</td></tr>';
+      sec.rows.forEach(function (r, ri) {
+        html += '<tr class="data">' + (sec.edit ? '<td class="act"><button class="btn small" data-edit="' + si + ':' + ri + '">✏️ قرار / تعديل</button></td>' : '') + r.cells.map(function (c, ci) {
+          var t = txt(c);
+          return '<td data-label="' + esc(heads[ci]) + '"' + (t === '' ? ' class="empty"' : '') + '>' + cellHtml(c, heads[ci]) + '</td>';
+        }).join('') + '</tr>';
+      });
+      return html + '</tbody></table></div>';
+    }
+    function draw(v) {
+      V = v;
+      var texts = [], body = '';
+      v.sections.forEach(function (sec, si) {
+        if (sec.type === 'text') { if (body) body += '<h2 class="sub">' + esc(sec.text) + '</h2>'; else texts.push(sec.text); return; }
+        if (!sec.rows.length && sec.header.length <= 4) { body += '<div class="infoline">' + sec.header.map(function (h) { return esc(h.t); }).join(' ') + '</div>'; return; }
+        if (sec.rows.length === 1 && !sec.edit && sec.header.length <= 12) { body += kpiTiles(sec); return; }
+        body += tableHtml(sec, si);
+      });
+      var lead = texts.shift();
+      var html = back + '<div class="vhead"><div><h1>' + esc(v.title) + '</h1>' + (lead ? '<div class="lead">' + esc(lead) + '</div>' : '') + '</div>' +
+        '<div class="vtools"><button class="btn small ghost" id="ref">↻ تحديث</button>' +
+        (meta.url ? '<a class="btn small ghost" target="_blank" rel="noopener" href="' + esc(meta.url) + '">فتح الملف</a>' : '') + '</div></div>' +
+        (texts.length ? '<details class="hint"><summary>ℹ️ طريقة الاستخدام</summary>' + texts.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</details>' : '') +
+        '<div class="toolbar"><input type="search" id="q" placeholder="🔎 ابحث باسم طالب أو معلم أو أي كلمة…"></div>' +
+        '<div class="muted small">آخر تحديث: ' + esc(fmtTime(v.updatedAt)) + '</div>' + body;
       h(html);
       var q = document.getElementById('q');
       q.oninput = function () {
         var s = q.value.trim();
-        $app.querySelectorAll('table.sheet tr').forEach(function (tr, i) { tr.style.display = !s || i < 3 || tr.textContent.indexOf(s) >= 0 ? '' : 'none'; });
+        $app.querySelectorAll('tr.data').forEach(function (tr) { tr.style.display = !s || tr.textContent.indexOf(s) >= 0 ? '' : 'none'; });
       };
-      document.getElementById('ref').onclick = function () { load(); };
-    };
-    var load = function () {
-      h('<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button><div class="loading">جارٍ تحميل «' + esc(meta.title) + '»…</div>');
+      document.getElementById('ref').onclick = load;
+      $app.querySelectorAll('[data-edit]').forEach(function (b) {
+        b.onclick = function () { var p = b.dataset.edit.split(':'); openEditor(v.sections[+p[0]], v.sections[+p[0]].rows[+p[1]]); };
+      });
+    }
+    function toISO(t) { var m = String(t).match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : ''; }
+    function openEditor(sec, row) {
+      var heads = sec.header.map(function (h) { return txt(h.t); });
+      var editIdx = sec.edit.map(function (e) { return e.i; });
+      var info = heads.map(function (h, i) {
+        var t = txt(row.cells[i]); if (!t || editIdx.indexOf(i) >= 0 || typeof row.cells[i] === 'object') return '';
+        return '<div class="kv"><span>' + esc(h) + '</span><b>' + esc(t) + '</b></div>';
+      }).join('');
+      var fields = sec.edit.map(function (e, n) {
+        var cur = txt(row.cells[e.i]), id = 'ef' + n, f;
+        if (e.type === 'list') {
+          f = '<select id="' + id + '"><option value="">— اختر —</option>' + (e.options || []).map(function (o) { return '<option' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') +
+            (cur && (e.options || []).indexOf(cur) < 0 ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
+        } else if (e.type === 'date') {
+          f = '<input type="date" id="' + id + '" value="' + esc(toISO(cur)) + '">';
+        } else {
+          f = '<textarea id="' + id + '" rows="3">' + esc(cur) + '</textarea>';
+        }
+        return '<div class="item"><label class="q">' + esc(e.name.replace(/[▼③]/g, '').trim()) + (e.trigger ? ' <span class="chip warn">قرار</span>' : '') + '</label>' + f + '</div>';
+      }).join('');
+      var ov = document.createElement('div'); ov.className = 'overlay';
+      ov.innerHTML = '<div class="sheetbox" role="dialog" aria-modal="true"><div class="sheethead"><b>اتخاذ قرار / تعديل</b><button class="x" id="ecl" aria-label="إغلاق">✕</button></div>' +
+        '<div class="sheetbody"><div class="kvs">' + info + '</div>' + fields +
+        '<div class="muted small">يُحفظ مباشرة في الملف، ويُنفَّذ القرار تلقائياً كما لو اخترته من الشيت.</div><div id="eerr"></div></div>' +
+        '<div class="actions"><button class="btn ghost" id="ecn">إلغاء</button><button class="btn green" id="esv">حفظ ✓</button></div></div>';
+      document.body.appendChild(ov);
+      var close = function () { ov.remove(); };
+      ov.onclick = function (e) { if (e.target === ov) close(); };
+      document.getElementById('ecl').onclick = close; document.getElementById('ecn').onclick = close;
+      var sv = document.getElementById('esv');
+      sv.onclick = function () {
+        var values = {}, n = 0;
+        sec.edit.forEach(function (e, k) {
+          var el = document.getElementById('ef' + k), val = el.value.trim(), cur = txt(row.cells[e.i]);
+          var same = e.type === 'date' ? val === toISO(cur) : val === cur;
+          if (!same) { values[e.name] = val; n++; }
+        });
+        if (!n) { close(); return; }
+        sv.disabled = true; sv.textContent = 'جارٍ الحفظ…';
+        api('edit', { viewKey: key, row: row.r, key: row.key, values: values }, 60000).then(function () {
+          close(); toast('✓ تم الحفظ في الملف'); load();
+        }).catch(function (e) {
+          if (e.auth) { close(); return logout(true); }
+          sv.disabled = false; sv.textContent = 'حفظ ✓';
+          document.getElementById('eerr').innerHTML = '<div class="err">' + esc(e.net ? 'تعذر الاتصال، حاول مرة أخرى' : e.message) + '</div>';
+        });
+      };
+    }
+    function load() {
+      if (!V) h(back + '<div class="loading">جارٍ تحميل «' + esc(meta.title) + '»…</div>');
       api('view', { viewKey: key }).then(function (j) { draw(j.view); })
         .catch(function (e) {
           if (e.auth) return logout(true);
-          h('<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button><div class="err">' + esc(e.net ? 'تعذر الاتصال بالإنترنت' : e.message) + '</div><button class="btn" id="r">إعادة المحاولة</button>');
+          h(back + '<div class="err">' + esc(e.net ? 'تعذر الاتصال بالإنترنت' : e.message) + '</div><button class="btn" id="r">إعادة المحاولة</button>');
           document.getElementById('r').onclick = load;
         });
-    };
+    }
     load();
   }
 
   // ---------- التوجيه ----------
   function route() {
     renderNetbar();
+    document.body.classList.toggle('wide', /^#\/view\//.test(location.hash || ''));
     var hash = location.hash || '#/home';
     if (!state.token) { return viewLogin('email'); }
     var m = hash.match(/^#\/(\w+)(?:\/([\w-]+))?/) || [];
