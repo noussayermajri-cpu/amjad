@@ -167,6 +167,7 @@
     refreshHome();
   }
   var homeSeq = 0;
+  var SEEN = { abs_daily: 1 }; // خانات يختفي إشعارها بمجرد فتحها
   function refreshHome() {
     var m = state.menu || { views: [] };
     if (!m.views.length || !state.token) return;
@@ -185,7 +186,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('.tile .badge'), function (x) { x.remove(); });
     Array.prototype.forEach.call(document.querySelectorAll('.tile.alert'), function (x) { x.classList.remove('alert'); var sm = x.querySelector('small'); if (sm) sm.textContent = 'عرض فقط'; });
     Object.keys(b).forEach(function (k) {
-      var n = Number(b[k].n) || 0; total += n;
+      var n = Number(b[k].n) || 0;
+      if (SEEN[k] && b[k].k && get('seen_' + k, '') === b[k].k) n = 0; // فُتح هذا اليوم: لا إشعار حتى يوم دراسي جديد
+      total += n;
       var t = document.getElementById('t_' + k); if (!t) return;
       var old = t.querySelector('.badge'); if (old) old.remove();
       t.classList.toggle('alert', n > 0);
@@ -454,6 +457,7 @@
   function viewSheet(key) {
     var meta = (state.menu.views || []).filter(function (v) { return v.key === key; })[0];
     if (!meta) { location.hash = '#/home'; return; }
+    try { var hb = (get('home', {}).badges || {})[key]; if (SEEN[key] && hb && hb.k) set('seen_' + key, hb.k); } catch (e) {}
     var back = '<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button>';
     var V = null;
     function txt(c) { return c && typeof c === 'object' ? (c.t || '') : String(c == null ? '' : c); }
