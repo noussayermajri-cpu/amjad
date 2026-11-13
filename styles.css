@@ -126,3 +126,7 @@ table.sheet.pro td.act{white-space:nowrap;width:1%}
 .kvs{background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-bottom:6px}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed #edf1f3;font-size:14px}
 .kv:last-child{border:0}.kv span{color:var(--muted)}.kv b{text-align:left;white-space:pre-wrap}
+
+.datebar{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-right:5px solid var(--green);border-radius:12px;padding:8px 12px;margin:8px 0}
+.datebar label{font-weight:800;color:var(--green-d);white-space:nowrap}
+.datebar select{flex:1;padding:10px;font-size:16px}

@@ -460,23 +460,50 @@
         if (sec.rows.length === 1 && !sec.edit && sec.header.length <= 12) { body += kpiTiles(sec); return; }
         body += tableHtml(sec, si);
       });
+      if (v.date) {
+        texts = texts.filter(function (t) { return !/التاريخ/.test(t); });
+        body = body.replace(/<div class="infoline">[^<]*التاريخ[^<]*<\/div>/g, '');
+      }
       var lead = texts.shift();
       var html = back + '<div class="vhead"><div><h1>' + esc(v.title) + '</h1>' + (lead ? '<div class="lead">' + esc(lead) + '</div>' : '') + '</div>' +
         '<div class="vtools"><button class="btn small ghost" id="ref">↻ تحديث</button>' +
         (meta.url ? '<a class="btn small ghost" target="_blank" rel="noopener" href="' + esc(meta.url) + '">فتح الملف</a>' : '') + '</div></div>' +
         (texts.length ? '<details class="hint"><summary>ℹ️ طريقة الاستخدام</summary>' + texts.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</details>' : '') +
-        '<div class="toolbar"><input type="search" id="q" placeholder="🔎 ابحث باسم طالب أو معلم أو أي كلمة…"></div>' +
+        (v.date ? dateBar(v.date) : '') +
+        '<div class="toolbar"><input type="search" id="q" placeholder="🔎 ابحث في هذه اللوحة باسم طالب أو معلم…"></div><div id="nores" class="warnbox hidden">لا توجد نتائج لهذا البحث في هذه اللوحة</div>' +
         '<div class="muted small">آخر تحديث: ' + esc(fmtTime(v.updatedAt)) + '</div>' + body;
       h(html);
       var q = document.getElementById('q');
       q.oninput = function () {
         var s = q.value.trim();
-        $app.querySelectorAll('tr.data').forEach(function (tr) { tr.style.display = !s || tr.textContent.indexOf(s) >= 0 ? '' : 'none'; });
+        var shown = 0, all = $app.querySelectorAll('tr.data');
+        all.forEach(function (tr) { var on = !s || tr.textContent.indexOf(s) >= 0; tr.style.display = on ? '' : 'none'; if (on) shown++; });
+        document.getElementById('nores').classList.toggle('hidden', !s || shown > 0 || !all.length);
       };
       document.getElementById('ref').onclick = load;
+      var ds = document.getElementById('dsel');
+      if (ds) ds.onchange = function () {
+        ds.disabled = true; toast('جارٍ تغيير التاريخ…');
+        api('setDate', { viewKey: key, date: ds.value }, 60000).then(function () { load(); })
+          .catch(function (e) { ds.disabled = false; if (e.auth) return logout(true); toast(e.net ? 'تعذر الاتصال' : e.message); });
+      };
       $app.querySelectorAll('[data-edit]').forEach(function (b) {
         b.onclick = function () { var p = b.dataset.edit.split(':'); openEditor(v.sections[+p[0]], v.sections[+p[0]].rows[+p[1]]); };
       });
+    }
+    function dateBar(d) {
+      var days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      var iso = function (x) { return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+      var lab = function (s) { var p = s.split('-'), x = new Date(+p[0], +p[1] - 1, +p[2]); return days[x.getDay()] + '  ' + p[0] + '/' + p[1] + '/' + p[2]; };
+      var opts = [], seen = {}, t = new Date();
+      for (var k = 0; opts.length < 30 && k < 60; k++) {
+        var x = new Date(t.getFullYear(), t.getMonth(), t.getDate() - k);
+        if (x.getDay() === 5 || x.getDay() === 6) continue;
+        var s = iso(x); seen[s] = 1; opts.push(s);
+      }
+      if (d.value && !seen[d.value]) opts.unshift(d.value);
+      return '<div class="datebar"><label for="dsel">📅 تاريخ التقرير</label><select id="dsel"><option value="today"' + (d.auto ? ' selected' : '') + '>اليوم (يتحدث تلقائياً)</option>' +
+        opts.map(function (s) { return '<option value="' + s + '"' + (!d.auto && s === d.value ? ' selected' : '') + '>' + lab(s) + '</option>'; }).join('') + '</select></div>';
     }
     function toISO(t) { var m = String(t).match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : ''; }
     function openEditor(sec, row) {
