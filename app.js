@@ -546,6 +546,75 @@
         opts.map(function (s) { return '<option value="' + s + '"' + (!d.auto && s === d.value ? ' selected' : '') + '>' + lab(s) + '</option>'; }).join('') + '</select></div>';
     }
     function toISO(t) { var m = String(t).match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : ''; }
+    // ---------- التواصل: واتساب ولي الأمر / بريد المعلم ----------
+    function contactsOf(row) {
+      var c = { wa: '', waLink: '', mailTo: '', mailCc: '', mailLink: '' };
+      row.cells.forEach(function (x) {
+        if (!x || typeof x !== 'object' || !x.l) return;
+        var m = /wa\.me\/(\d+)/.exec(x.l); if (m) { c.wa = m[1]; c.waLink = x.l; }
+        if (/mail\.google\.com|^mailto:/.test(x.l)) {
+          c.mailLink = x.l;
+          try { var q = new URL(x.l).searchParams; c.mailTo = q.get('to') || ''; c.mailCc = q.get('cc') || ''; } catch (e) {}
+        }
+      });
+      return c;
+    }
+    function colVal(sec, row, re) {
+      for (var i = 0; i < sec.header.length; i++) if (re.test(txt(sec.header[i].t))) return txt(row.cells[i]);
+      return '';
+    }
+    function clean(d) { return String(d || '').replace(/^[^\u0600-\u06FFA-Za-z0-9]+/, '').trim(); }
+    function decisionMessages(sec, row, values) {
+      var dec = '', note = '';
+      Object.keys(values).forEach(function (k) {
+        if (/القرار ▼|قرار الموجه|③ القرار/.test(k)) dec = values[k];
+        if (/ملاحظ/.test(k)) note = values[k];
+      });
+      if (!dec) return null;
+      var c = contactsOf(row), out = { wa: '', mail: '' };
+      var sign = key === 'tch_viol' ? 'وكالة شؤون المعلمين' : 'وكالة شؤون الطلاب';
+      sign += ' – مدارس الأمجاد العالمية (قسم البنين)';
+      if (c.wa && key !== 'tch_viol') {
+        var st = colVal(sec, row, /^الطالب$/), cl = colVal(sec, row, /^الصف$/);
+        var t = 'السلام عليكم ورحمة الله وبركاته\nولي أمر الطالب/ ' + st + (cl ? ' (' + cl + ')' : '') +
+          '\nنفيدكم بأنه تم اتخاذ الإجراء التالي بخصوص ابنكم: «' + clean(dec) + '»';
+        if (note) t += '\nملاحظة: ' + note;
+        if (/استدعاء/.test(dec)) t += '\nنأمل التكرم بالحضور إلى المدرسة في أقرب وقت لمقابلة وكيل شؤون الطلاب.';
+        else if (/إحالة/.test(dec)) t += '\nسيتواصل معكم الموجه الطلابي لمتابعة الحالة.';
+        t += '\nشاكرين تعاونكم\n' + sign;
+        out.wa = 'https://wa.me/' + c.wa + '?text=' + encodeURIComponent(t);
+      }
+      if (c.mailTo && key === 'tch_viol') {
+        var tch = colVal(sec, row, /^المعلم$/), no = colVal(sec, row, /^رقم$/);
+        var body = 'المكرم الأستاذ/ ' + tch + '   المحترم\nالسلام عليكم ورحمة الله وبركاته،\n\n' +
+          'بالإشارة إلى المساءلة الإدارية رقم ' + no + '، نفيدكم بأن الإدارة قررت ما يلي: «' + clean(dec) + '»' +
+          (note ? '\nملاحظة: ' + note : '') + '\n\nشاكرين تعاونكم،\n' + sign;
+        out.mail = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(c.mailTo) +
+          (c.mailCc ? '&cc=' + encodeURIComponent(c.mailCc) : '') +
+          '&su=' + encodeURIComponent('قرار بشأن المساءلة رقم ' + no + ' – الأستاذ ' + tch) + '&body=' + encodeURIComponent(body);
+      }
+      return (out.wa || out.mail) ? out : null;
+    }
+    function contactBar(row) {
+      var c = contactsOf(row), b = '';
+      if (c.waLink) b += '<a class="btn small wa" href="' + esc(c.waLink) + '" target="_blank" rel="noopener">📲 واتساب ولي الأمر</a>';
+      if (c.mailLink) b += '<a class="btn small ghost" href="' + esc(c.mailLink) + '" target="_blank" rel="noopener">📧 إرسال المساءلة للمعلم</a>';
+      return b ? '<div class="contactbar"><span class="muted small">تواصل:</span>' + b + '</div>' : '';
+    }
+    function followUp(msgs) {
+      var ov = document.createElement('div'); ov.className = 'overlay';
+      ov.innerHTML = '<div class="sheetbox" role="dialog" aria-modal="true"><div class="sheethead"><b>✓ تم حفظ القرار</b><button class="x" id="fcl" aria-label="إغلاق">✕</button></div>' +
+        '<div class="sheetbody"><p>هل تريد إبلاغ ' + (msgs.mail ? 'المعلم' : 'ولي الأمر') + ' بالقرار الآن؟ تُفتح الرسالة جاهزة، وتراجعها ثم تضغط إرسال.</p>' +
+        (msgs.wa ? '<a class="btn wa" href="' + esc(msgs.wa) + '" target="_blank" rel="noopener">📲 إرسال القرار لولي الأمر (واتساب)</a>' : '') +
+        (msgs.mail ? '<a class="btn" href="' + esc(msgs.mail) + '" target="_blank" rel="noopener">📧 إرسال القرار للمعلم (بريد)</a>' : '') +
+        '</div><div class="actions"><button class="btn ghost" id="fln">لاحقاً</button></div></div>';
+      document.body.appendChild(ov);
+      var close = function () { ov.remove(); };
+      ov.onclick = function (e) { if (e.target === ov) close(); };
+      document.getElementById('fcl').onclick = close; document.getElementById('fln').onclick = close;
+      Array.prototype.forEach.call(ov.querySelectorAll('a.btn'), function (a) { a.addEventListener('click', function () { setTimeout(close, 300); }); });
+    }
+
     function openEditor(sec, row) {
       var heads = sec.header.map(function (h) { return txt(h.t); });
       var editIdx = sec.edit.map(function (e) { return e.i; });
@@ -567,7 +636,7 @@
       }).join('');
       var ov = document.createElement('div'); ov.className = 'overlay';
       ov.innerHTML = '<div class="sheetbox" role="dialog" aria-modal="true"><div class="sheethead"><b>اتخاذ قرار / تعديل</b><button class="x" id="ecl" aria-label="إغلاق">✕</button></div>' +
-        '<div class="sheetbody"><div class="kvs">' + info + '</div>' + fields +
+        '<div class="sheetbody">' + contactBar(row) + '<div class="kvs">' + info + '</div>' + fields +
         '<div class="muted small">يُحفظ مباشرة في الملف، ويُنفَّذ القرار تلقائياً كما لو اخترته من الشيت.</div><div id="eerr"></div></div>' +
         '<div class="actions"><button class="btn ghost" id="ecn">إلغاء</button><button class="btn green" id="esv">حفظ ✓</button></div></div>';
       document.body.appendChild(ov);
@@ -586,6 +655,7 @@
         sv.disabled = true; sv.textContent = 'جارٍ الحفظ…';
         api('edit', { viewKey: key, row: row.r, key: row.key, values: values }, 60000).then(function () {
           close(); toast('✓ تم الحفظ في الملف'); load();
+          var msgs = decisionMessages(sec, row, values); if (msgs) followUp(msgs);
         }).catch(function (e) {
           if (e.auth) { close(); return logout(true); }
           sv.disabled = false; sv.textContent = 'حفظ ✓';
