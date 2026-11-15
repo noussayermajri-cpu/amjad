@@ -475,7 +475,7 @@
     if (!meta) { location.hash = '#/home'; return; }
     try { var hb = (get('home', {}).badges || {})[key]; if (SEEN[key] && hb && hb.k) set('seen_' + key, hb.k); } catch (e) {}
     var back = '<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button>';
-    var V = null;
+    var V = null, refreshing = false;
     function txt(c) { return c && typeof c === 'object' ? (c.t || '') : String(c == null ? '' : c); }
     function tone(t) {
       if (/^(✅|✓|✔|🏁)|مغلق|تم /.test(t)) return 'ok';
@@ -536,7 +536,9 @@
         all.forEach(function (tr) { var on = !s || tr.textContent.indexOf(s) >= 0; tr.style.display = on ? '' : 'none'; if (on) shown++; });
         document.getElementById('nores').classList.toggle('hidden', !s || shown > 0 || !all.length);
       };
-      document.getElementById('ref').onclick = load;
+      document.getElementById('ref').onclick = function () {
+        var b = this; b.disabled = true; b.textContent = '⏳ جارٍ التحديث…'; refreshing = true; load();
+      };
       var ds = document.getElementById('dsel');
       if (ds) ds.onchange = function () {
         ds.disabled = true; toast('جارٍ تغيير التاريخ…');
@@ -681,7 +683,10 @@
     }
     function load() {
       if (!V) h(back + '<div class="loading">جارٍ تحميل «' + esc(meta.title) + '»…</div>');
-      api('view', { viewKey: key }).then(function (j) { draw(j.view); })
+      api('view', { viewKey: key }).then(function (j) {
+        draw(j.view);
+        if (refreshing) { refreshing = false; toast('✓ تم التحديث – ' + fmtTime(j.view.updatedAt)); }
+      })
         .catch(function (e) {
           if (e.auth) return logout(true);
           h(back + '<div class="err">' + esc(e.net ? 'تعذر الاتصال بالإنترنت' : e.message) + '</div><button class="btn" id="r">إعادة المحاولة</button>');
