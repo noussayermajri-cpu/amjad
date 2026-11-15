@@ -262,7 +262,9 @@
     if (F.offline) html += '<div class="warnbox" style="margin-bottom:8px">بدون اتصال — سيُحفظ الإدخال في الجهاز ويُرسل تلقائياً عند عودة الإنترنت.</div>';
     html += '<div class="pagehead">' + esc(F.page === 0 ? 'البيانات الأساسية' : page.title || ('الصفحة ' + (F.page + 1))) + '</div><div class="pagebody">';
     if (F.page > 0 && page.help) html += '<p class="help">' + esc(page.help) + '</p>';
-    page.items.forEach(function (it) { html += renderItem(it); });
+    var abs = isAbsPage(page), noAbs = abs && F.answers['__noabs_' + F.page] === true;
+    if (abs) html += '<button type="button" id="noAbs" class="btn ' + (noAbs ? 'green' : 'ghost') + '" style="width:100%;margin:4px 0 12px">' + (noAbs ? '✓ لا يوجد غياب — جميع الطلاب حاضرون' : 'لا يوجد غياب (جميع الطلاب حاضرون)') + '</button>';
+    page.items.forEach(function (it) { if (noAbs && it.type === 'checkbox') return; html += renderItem(it); });
     html += '</div>';
     if (errMsg) html += '<div class="err">' + esc(errMsg) + '</div>';
     var nt = nextTarget();
@@ -274,6 +276,17 @@
     var prev = document.getElementById('prev');
     if (prev) prev.onclick = function () { F.page = F.history.pop(); saveDraft(); renderPage(); };
     document.getElementById('next').onclick = onNext;
+    var nb = document.getElementById('noAbs');
+    if (nb) nb.onclick = function () {
+      var k = '__noabs_' + F.page, on = F.answers[k] !== true;
+      if (on) page.items.forEach(function (it) { if (it.type === 'checkbox') delete F.answers[it.id]; });
+      F.answers[k] = on; saveDraft(); renderPage();
+    };
+  }
+
+  // صفحة صف في نموذج الغياب: فيها قوائم طلاب (اختيار متعدد)
+  function isAbsPage(page) {
+    return F.key === 'absence' && F.page > 0 && page.items.some(function (it) { return it.type === 'checkbox'; });
   }
 
   function renderItem(it) {
@@ -370,6 +383,9 @@
       if (it.required && isEmpty(F.answers[it.id])) return 'الحقل «' + it.title + '» مطلوب';
       if (String(F.answers[it.id] || '').indexOf('__MISSING__') === 0) return 'اسمك غير موجود في قائمة النموذج. راجع الوكيل.';
     }
+    if (isAbsPage(page) && F.answers['__noabs_' + F.page] !== true &&
+        !page.items.some(function (it) { return it.type === 'checkbox' && !isEmpty(F.answers[it.id]); }))
+      return 'حدّد الطلاب الغائبين أو المتأخرين، أو اضغط «لا يوجد غياب».';
     return '';
   }
 
