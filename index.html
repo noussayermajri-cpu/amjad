@@ -31,5 +31,51 @@
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="config.js"></script>
   <script src="app.js"></script>
+  <!-- تثبيت التطبيق على آيفون/آيباد: أبل لا تسمح بزر تثبيت تلقائي، فنعرض الخطوات للمستخدم -->
+  <div id="iosSheet" class="hidden" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center">
+    <div style="background:#fff;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -4px 20px rgba(0,0,0,.15);font-size:16px;line-height:1.9;color:#1f2a33">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <img src="icons/apple-touch-icon.png" alt="" style="width:44px;height:44px;border-radius:10px">
+        <b style="color:#1A9BD7;font-size:18px">تثبيت التطبيق على الآيفون</b>
+      </div>
+      <div id="iosSteps"></div>
+      <button id="iosClose" type="button" style="margin-top:14px;width:100%;padding:12px;border:0;border-radius:12px;background:#1A9BD7;color:#fff;font-size:16px;font-weight:bold">فهمت</button>
+    </div>
+  </div>
+  <script>
+  (function () {
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    if (!isIOS || standalone) return;
+    var ib = document.getElementById('installBtn'), sheet = document.getElementById('iosSheet'), steps = document.getElementById('iosSteps');
+    var share = '<span style="display:inline-block;border:1px solid #1A9BD7;border-radius:6px;padding:0 6px;color:#1A9BD7">⬆︎</span>';
+    var html;
+    if (/CriOS/.test(ua)) {
+      html = '<ol style="margin:0;padding-right:20px">' +
+        '<li>اضغط زر المشاركة ' + share + ' في شريط العنوان أعلى الصفحة.</li>' +
+        '<li>اختر <b>«إضافة إلى الشاشة الرئيسية»</b> (إن لم تظهر، مرّر للأسفل أو اضغط «تعديل الإجراءات»).</li>' +
+        '<li>اضغط <b>«إضافة»</b>، فتظهر أيقونة التطبيق على الشاشة.</li></ol>';
+    } else if (/FxiOS|EdgiOS|FBAN|FBAV|Instagram|Line\/|WhatsApp|GSA\//.test(ua) || !/Safari/.test(ua)) {
+      html = '<p style="margin:0 0 6px">هذا المتصفح لا يدعم إضافة التطبيق. افتح الرابط في <b>Safari</b>:</p>' +
+        '<ol style="margin:0;padding-right:20px"><li>انسخ رابط الصفحة.</li><li>افتح Safari والصق الرابط.</li>' +
+        '<li>اضغط زر المشاركة ' + share + ' ثم <b>«إضافة إلى الشاشة الرئيسية»</b> ثم <b>«إضافة»</b>.</li></ol>';
+    } else {
+      html = '<ol style="margin:0;padding-right:20px">' +
+        '<li>اضغط زر المشاركة ' + share + ' أسفل الشاشة (أو زر <b>•••</b> ثم «مشاركة»).</li>' +
+        '<li>مرّر للأسفل واختر <b>«إضافة إلى الشاشة الرئيسية»</b>.</li>' +
+        '<li>اضغط <b>«إضافة»</b>، فتظهر أيقونة التطبيق على الشاشة.</li></ol>';
+    }
+    steps.innerHTML = html;
+    function open() { sheet.classList.remove('hidden'); }
+    function close() { sheet.classList.add('hidden'); }
+    ib.textContent = '⬇ تثبيت التطبيق';
+    ib.classList.remove('hidden');
+    ib.addEventListener('click', open);
+    document.getElementById('iosClose').addEventListener('click', close);
+    sheet.addEventListener('click', function (e) { if (e.target === sheet) close(); });
+    try { if (!localStorage.getItem('iosInstallShown')) { localStorage.setItem('iosInstallShown', '1'); setTimeout(open, 800); } } catch (e) {}
+  })();
+  </script>
 </body>
 </html>
