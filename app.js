@@ -590,7 +590,85 @@
       });
       return html + '</tbody></table></div>';
     }
+    // ---------- تقارير الطالب (بنفس شكل التقرير في الملف) ----------
+    function repTable(s) {
+      var heads = s.header.map(function (x) { return txt(x.t); });
+      var rows = s.rows.filter(function (r) { return r.cells.some(function (c) { return txt(c).trim() !== ''; }); });
+      var keep = heads.map(function (hh, i) { return hh.trim() !== '' || rows.some(function (r) { return txt(r.cells[i]).trim() !== ''; }); });
+      var idx = []; keep.forEach(function (k, i) { if (k) idx.push(i); });
+      if (!idx.length) return '';
+      var kv = heads.length && /:$|^اسم الطالب/.test(heads[0].trim());
+      var out = '<div class="repwrap"><table class="rept' + (kv ? ' kv' : '') + '"><thead><tr>' + idx.map(function (i) { return '<th>' + esc(heads[i]) + '</th>'; }).join('') + '</tr></thead><tbody>';
+      rows.forEach(function (r) { out += '<tr>' + idx.map(function (i) { return '<td>' + cellHtml(r.cells[i], heads[i]) + '</td>'; }).join('') + '</tr>'; });
+      return out + '</tbody></table></div>';
+    }
+    function drawReport(v) {
+      V = v;
+      var p = v.pick, secs = v.sections, ti = -1;
+      secs.forEach(function (s, i) { if (ti < 0 && s.type === 'text' && /تقرير/.test(s.text)) ti = i; });
+      var conf = secs.some(function (s) { return s.type === 'text' && /CONFIDENTIAL|سري للغاية/.test(s.text); });
+      var body = '', sub = true;
+      for (var i = ti + 1; i < secs.length; i++) {
+        var s = secs[i];
+        if (s.type !== 'text') { body += repTable(s); continue; }
+        var t = s.text;
+        if (/^الطالب:/.test(t)) continue;
+        if (sub) { sub = false; if (!/^(أولاً|ثانياً)/.test(t)) { body += '<div class="repsub">' + esc(t) + '</div>'; continue; } }
+        if (/^(أولاً|ثانياً|ثالثاً|رابعاً|خامساً|سادساً|سابعاً|ثامناً)/.test(t)) { body += '<div class="repbar">' + esc(t) + '</div>'; continue; }
+        var nx = secs[i + 1];
+        if (/\s·\s/.test(t) && nx && nx.type === 'text' && /\/\s*100/.test(nx.text)) {
+          var L = t.split(/\s+·\s+/), S = nx.text.split(/\s+·\s+/), n2 = secs[i + 2], St = (n2 && n2.type === 'text' && !/^(أولاً|ثانياً|ثالثاً|رابعاً)/.test(n2.text)) ? n2.text.split(/\s+·\s+/) : [];
+          body += '<div class="scores">' + L.map(function (l, k) { return '<div><span>' + esc(l) + '</span><b>' + esc(S[k] || '') + '</b><small>' + esc(St[k] || '') + '</small></div>'; }).join('') + '</div>';
+          i += St.length ? 2 : 1; continue;
+        }
+        body += '<p class="repnote">' + esc(t) + '</p>';
+      }
+      var html = back + '<div class="vtools rtools"><button class="btn small ghost" id="ref">↻ تحديث</button>' +
+        (meta.url ? '<a class="btn small ghost" target="_blank" rel="noopener" href="' + esc(meta.url) + '">فتح الملف</a>' : '') + '</div>' +
+        '<div class="reppick"><label for="pk">👤 ' + esc(p.label) + '</label><input id="pk" list="pkl" value="' + esc(p.value) + '" placeholder="اكتب اسم الطالب أو الصف…" autocomplete="off">' +
+        '<datalist id="pkl">' + p.options.map(function (o) { return '<option value="' + esc(o) + '">'; }).join('') + '</datalist><button class="btn small" id="pkgo">عرض التقرير</button></div>' +
+        (p.send ? '<button class="btn wa repsend" id="repsend">📲 إرسال التقرير لولي الأمر (PDF عبر واتساب)</button>' : '') +
+        '<div class="rep"><div class="rephead"><img src="icons/icon-512.png" alt=""><div><b>مدارس الأمجاد العالمية</b><span>AL-AMJAD INTERNATIONAL SCHOOLS</span><i>Learning for the life</i></div>' +
+        (conf ? '<em class="conf">سري للغاية<br>CONFIDENTIAL</em>' : '') + '</div>' +
+        '<div class="reptitle">' + esc(ti >= 0 ? secs[ti].text : v.title) + '</div>' + body + '</div>' +
+        '<div class="muted small">آخر تحديث: ' + esc(fmtTime(v.updatedAt)) + '</div>';
+      h(html);
+      document.getElementById('ref').onclick = load;
+      var pk = document.getElementById('pk'), go = document.getElementById('pkgo');
+      function pickNow() {
+        var val = pk.value.trim();
+        if (p.options.indexOf(val) < 0) { toast('اختر الطالب من القائمة'); return; }
+        if (val === p.value) return;
+        go.disabled = true; go.textContent = 'جارٍ التحميل…';
+        api('pick', { viewKey: key, value: val }, 60000).then(function () { load(); })
+          .catch(function (e) { go.disabled = false; go.textContent = 'عرض التقرير'; if (e.auth) return logout(true); toast(e.net ? 'تعذر الاتصال' : e.message); });
+      }
+      go.onclick = pickNow;
+      pk.onchange = function () { if (p.options.indexOf(pk.value.trim()) >= 0) pickNow(); };
+      pk.onkeydown = function (e) { if (e.key === 'Enter') pickNow(); };
+      var sb = document.getElementById('repsend');
+      if (sb) sb.onclick = function () {
+        sb.disabled = true; sb.textContent = 'جارٍ تجهيز ملف PDF… (حتى 30 ثانية)';
+        api('reportPdf', { value: p.value }, 120000).then(function (r) {
+          sb.disabled = false; sb.textContent = '📲 إرسال التقرير لولي الأمر (PDF عبر واتساب)';
+          var ov = document.createElement('div'); ov.className = 'overlay';
+          ov.innerHTML = '<div class="sheetbox" role="dialog" aria-modal="true"><div class="sheethead"><b>✓ تقرير ' + esc(r.student || p.value) + ' جاهز</b><button class="x" id="rcl" aria-label="إغلاق">✕</button></div>' +
+            '<div class="sheetbody"><p>تُفتح رسالة واتساب جاهزة لولي الأمر وفيها رابط ملف PDF، راجعها ثم اضغط إرسال.</p>' +
+            (r.wa ? '<a class="btn wa" href="' + esc(r.wa) + '" target="_blank" rel="noopener">📲 إرسال لولي الأمر (واتساب)</a>' : '<div class="warnbox">لا يوجد رقم لولي الأمر في الملف</div>') +
+            '<a class="btn ghost" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 فتح ملف PDF</a></div>' +
+            '<div class="actions"><button class="btn ghost" id="rln">إغلاق</button></div></div>';
+          document.body.appendChild(ov);
+          var close = function () { ov.remove(); };
+          ov.onclick = function (e) { if (e.target === ov) close(); };
+          document.getElementById('rcl').onclick = close; document.getElementById('rln').onclick = close;
+        }).catch(function (e) {
+          sb.disabled = false; sb.textContent = '📲 إرسال التقرير لولي الأمر (PDF عبر واتساب)';
+          if (e.auth) return logout(true); toast(e.net ? 'تعذر الاتصال، حاول مرة أخرى' : e.message);
+        });
+      };
+    }
     function draw(v) {
+      if (v.pick) return drawReport(v);
       V = v;
       v.sections.forEach(waFix);
       var texts = [], body = '';

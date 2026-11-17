@@ -145,3 +145,31 @@ table.sheet.pro td.act{white-space:nowrap;width:1%}
 .contactbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;padding:10px;border:1px dashed var(--line);border-radius:12px;background:#f9fbfc}
 .btn.wa,.btn.small.wa{background:#25D366;border-color:#25D366;color:#fff;text-decoration:none}
 .sheetbody>a.btn{display:block;text-align:center;margin:8px 0;text-decoration:none}
+
+/* تقرير الطالب */
+.reppick{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.reppick label{font-weight:800}
+.reppick input{flex:1;min-width:200px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px}
+.repsend{width:100%;margin:0 0 12px}
+.rep{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:8px 0 12px;color:#1f2a33}
+.rephead{display:flex;align-items:center;gap:12px;border-bottom:3px solid #8DB56B;padding-bottom:10px}
+.rephead img{width:64px;height:64px;object-fit:contain}
+.rephead div{display:flex;flex-direction:column;flex:1;text-align:center}
+.rephead b{color:#1A9BD7;font-size:20px}
+.rephead span{color:#1A9BD7;font-weight:800;font-size:13px;letter-spacing:.5px}
+.rephead i{color:#8DB56B;font-size:13px}
+.rephead .conf{color:#c62828;font-weight:900;font-style:normal;text-align:center;font-size:13px}
+.reptitle{background:#8DB56B;color:#fff;font-weight:900;font-size:18px;text-align:center;padding:10px;margin:10px 0 6px;border-radius:6px}
+.repsub{text-align:center;font-size:13px;color:#4b5a63;margin-bottom:8px}
+.repbar{background:#1A9BD7;color:#fff;font-weight:800;padding:7px 10px;margin:14px 0 6px;border-radius:6px}
+.repnote{margin:6px 0;line-height:1.7}
+.repwrap{overflow-x:auto}
+.rept{width:100%;border-collapse:collapse;font-size:14px}
+.rept th{background:#e8f4fb;color:#0f5f86;font-weight:800;border:1px solid #cfe3ee;padding:6px;text-align:center}
+.rept td{border:1px solid #e1e8ec;padding:6px;text-align:center}
+.rept.kv th{background:#f3f7f0;color:#3f5a2a}
+.scores{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0}
+.scores div{border:1px solid #cfe3ee;border-radius:10px;text-align:center;padding:8px;display:flex;flex-direction:column;gap:2px}
+.scores span{color:#4b5a63;font-weight:700;font-size:13px}
+.scores b{color:#1A9BD7;font-size:28px}
+.scores small{font-weight:700}
