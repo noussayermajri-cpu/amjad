@@ -598,6 +598,14 @@
       var idx = []; keep.forEach(function (k, i) { if (k) idx.push(i); });
       if (!idx.length) return '';
       var kv = heads.length && /:$|^اسم الطالب/.test(heads[0].trim());
+      if (kv) { // بيانات الطالب: أزواج (البيان ← القيمة) أسهل قراءة على الجوال
+        var pairs = '';
+        [heads].concat(rows.map(function (r) { return r.cells.map(txt); })).forEach(function (cells) {
+          var ne = cells.map(function (x) { return String(x).trim(); }).filter(String);
+          for (var q = 0; q < ne.length; q += 2) pairs += '<div><span>' + esc(ne[q].replace(/:$/, '')) + '</span><b>' + esc(ne[q + 1] || '') + '</b></div>';
+        });
+        return '<div class="kvgrid">' + pairs + '</div>';
+      }
       var out = '<div class="repwrap"><table class="rept' + (kv ? ' kv' : '') + '"><thead><tr>' + idx.map(function (i) { return '<th>' + esc(heads[i]) + '</th>'; }).join('') + '</tr></thead><tbody>';
       rows.forEach(function (r) { out += '<tr>' + idx.map(function (i) { return '<td>' + cellHtml(r.cells[i], heads[i]) + '</td>'; }).join('') + '</tr>'; });
       return out + '</tbody></table></div>';
@@ -618,7 +626,7 @@
         var nx = secs[i + 1];
         if (/\s·\s/.test(t) && nx && nx.type === 'text' && /\/\s*100/.test(nx.text)) {
           var L = t.split(/\s+·\s+/), S = nx.text.split(/\s+·\s+/), n2 = secs[i + 2], St = (n2 && n2.type === 'text' && !/^(أولاً|ثانياً|ثالثاً|رابعاً)/.test(n2.text)) ? n2.text.split(/\s+·\s+/) : [];
-          body += '<div class="scores">' + L.map(function (l, k) { return '<div><span>' + esc(l) + '</span><b>' + esc(S[k] || '') + '</b><small>' + esc(St[k] || '') + '</small></div>'; }).join('') + '</div>';
+          body += '<div class="scores">' + L.map(function (l, k) { return '<div><span>' + esc(l) + '</span><b dir="ltr">' + esc(S[k] || '') + '</b><small>' + esc(St[k] || '') + '</small></div>'; }).join('') + '</div>';
           i += St.length ? 2 : 1; continue;
         }
         body += '<p class="repnote">' + esc(t) + '</p>';

@@ -173,3 +173,8 @@ table.sheet.pro td.act{white-space:nowrap;width:1%}
 .scores span{color:#4b5a63;font-weight:700;font-size:13px}
 .scores b{color:#1A9BD7;font-size:28px}
 .scores small{font-weight:700}
+
+.kvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;margin:6px 0}
+.kvgrid div{display:flex;justify-content:space-between;gap:10px;border:1px solid #e1e8ec;border-radius:8px;padding:7px 10px;background:#f9fbf7}
+.kvgrid span{color:#3f5a2a;font-weight:800}
+.kvgrid b{text-align:left}
