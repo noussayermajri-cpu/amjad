@@ -494,13 +494,96 @@
         return '<div class="kpi"><b>' + cellHtml(sec.rows[0].cells[i], '') + '</b><span>' + esc(h.t) + '</span></div>';
       }).join('') + '</div>';
     }
+    // عمود التاريخ في الجدول (للتصفية بيوم معيّن)، أو -1
+    function dateCol(sec) {
+      if (!sec.header) return -1;
+      for (var i = 0; i < sec.header.length; i++) if (/تاريخ/.test(txt(sec.header[i].t))) return i;
+      return -1;
+    }
+    // زر واتساب ولي الأمر: إن لم يصل الرابط جاهزاً من الملف نبنيه من «الجوال» و«نص الرسالة»
+    function waFix(sec) {
+      if (sec.type !== 'table') return sec;
+      var hs = sec.header.map(function (h) { return txt(h.t); });
+      var pi = hs.indexOf('الجوال'), mi = hs.indexOf('نص الرسالة'), wi = -1;
+      hs.forEach(function (t, i) { if (wi < 0 && /^واتساب/.test(t)) wi = i; });
+      if (pi < 0 || mi < 0 || wi < 0) return sec;
+      sec.rows.forEach(function (r) {
+        var c = r.cells[wi], ph = txt(r.cells[pi]).replace(/\D/g, ''), msg = txt(r.cells[mi]);
+        if ((!c || typeof c !== 'object') && ph && msg) r.cells[wi] = { t: '📲 إرسال', l: 'https://wa.me/' + ph + '?text=' + encodeURIComponent(msg) };
+        hs.forEach(function (t, i) { if (i !== wi && /^واتساب/.test(t) && typeof r.cells[i] !== 'object') r.cells[i] = ''; }); // لا نعرض زراً بلا رابط
+      });
+      return sec;
+    }
+    // قائمة الغائبين والمتأخرين مع زر الإرسال، تُعرض داخل «التقرير اليومي» و«لوحة المتابعة»
+    var ABS_IN = { abs_daily: 1, beh_dash: 1 };
+    function hasView(k) { return (state.menu.views || []).some(function (x) { return x.key === k; }); }
+    function absBox(v) {
+      var box = document.getElementById('absbox'); if (!box) return;
+      box.innerHTML = '<h2 class="sub">📲 إشعار أولياء أمور الغائبين والمتأخرين</h2><div class="loading">جارٍ تحميل القائمة…</div>';
+      api('view', { viewKey: 'abs_today' }).then(function (j) {
+        if (V !== v || !document.getElementById('absbox')) return;
+        var sec = null;
+        j.view.sections.forEach(function (x) { if (!sec && x.type === 'table' && x.header.some(function (h) { return txt(h.t) === 'الطالب'; })) sec = waFix(x); });
+        var d = j.view.date && j.view.date.value ? j.view.date.value.replace(/-/g, '/') : '';
+        var head = '<h2 class="sub">📲 إشعار أولياء أمور الغائبين والمتأخرين' + (d ? ' – ' + esc(d) : '') + '</h2>';
+        if (!sec || !sec.rows.length) { box.innerHTML = head + '<div class="infoline">لا يوجد غائبون أو متأخرون مرصودون في هذا اليوم ✓</div>'; return; }
+        var keep = []; sec.header.forEach(function (h, i) { var t = txt(h.t); if (t !== 'نص الرسالة' && t !== 'الجوال') keep.push(i); });
+        var small = { type: 'table', header: keep.map(function (i) { return sec.header[i]; }),
+          rows: sec.rows.map(function (r) { return { r: r.r, key: r.key, cells: keep.map(function (i) { return r.cells[i]; }) }; }) };
+        box.innerHTML = head + (key === 'beh_dash' ? '<div class="muted small">لتغيير اليوم افتح لوحة «اليوم» أو «التقرير اليومي» وغيّر التاريخ منها.</div>' : '') + tableHtml(small, 'abs');
+        applyFilter();
+      }).catch(function (e) {
+        if (e.auth) return logout(true);
+        var b = document.getElementById('absbox'); if (b) b.innerHTML = '<h2 class="sub">📲 إشعار أولياء أمور الغائبين والمتأخرين</h2><div class="err">تعذر تحميل القائمة، اضغط «تحديث».</div>';
+      });
+    }
+    // تصفية الصفوف: البحث + اليوم المختار
+    function applyFilter() {
+      var q = document.getElementById('q'), fs = document.getElementById('fsel');
+      var s = q ? q.value.trim() : '', d = fs ? fs.value : '';
+      var shown = 0, all = $app.querySelectorAll('tr.data');
+      all.forEach(function (tr) {
+        var on = (!s || tr.textContent.indexOf(s) >= 0) && (!d || !tr.hasAttribute('data-d') || tr.getAttribute('data-d') === d);
+        tr.style.display = on ? '' : 'none'; if (on) shown++;
+      });
+      $app.querySelectorAll('table.sheet').forEach(function (tb) {
+        var n = 0; tb.querySelectorAll('tr.data').forEach(function (tr) { if (tr.style.display !== 'none') n++; });
+        var w = tb.parentNode.previousElementSibling, c = w && w.querySelector('.tc'); if (c) c.textContent = n;
+      });
+      var nr = document.getElementById('nores');
+      if (nr) { nr.textContent = d && !s ? 'لا توجد سجلات في هذا اليوم' : 'لا توجد نتائج لهذا البحث في هذه اللوحة'; nr.classList.toggle('hidden', (!s && !d) || shown > 0 || !all.length); }
+    }
+    function filterBar(v) {
+      var counts = {}, any = false;
+      v.sections.forEach(function (sec) {
+        if (sec.type !== 'table') return; var di = dateCol(sec); if (di < 0) return; any = true;
+        sec.rows.forEach(function (r) { var d = toISO(txt(r.cells[di])); if (d) counts[d] = (counts[d] || 0) + 1; });
+      });
+      if (!any) return '';
+      var opts = schoolDays(30); Object.keys(counts).forEach(function (d) { if (opts.indexOf(d) < 0) opts.push(d); });
+      opts.sort().reverse();
+      return '<div class="datebar"><label for="fsel">📅 عرض سجلات يوم</label><select id="fsel"><option value="">كل الأيام</option>' +
+        opts.map(function (d) { return '<option value="' + d + '">' + dayLabel(d) + (counts[d] ? '  (' + counts[d] + ')' : '') + '</option>'; }).join('') + '</select></div>';
+    }
+    var DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    function dayLabel(s) { var p = s.split('-'), x = new Date(+p[0], +p[1] - 1, +p[2]); return DAYS[x.getDay()] + '  ' + p[0] + '/' + p[1] + '/' + p[2]; }
+    function schoolDays(n) {
+      var out = [], t = new Date();
+      for (var k = 0; out.length < n && k < n * 2; k++) {
+        var x = new Date(t.getFullYear(), t.getMonth(), t.getDate() - k);
+        if (x.getDay() === 5 || x.getDay() === 6) continue;
+        out.push(x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2));
+      }
+      return out;
+    }
     function tableHtml(sec, si) {
       var heads = sec.header.map(function (h) { return txt(h.t); });
-      var html = '<div class="tcount">' + sec.rows.length + ' سجل</div><div class="tablewrap pro"><table class="sheet pro"><thead><tr>' + (sec.edit ? '<th>إجراء</th>' : '') +
+      var di = dateCol(sec);
+      var html = '<div class="tcount"><span class="tc">' + sec.rows.length + '</span> سجل</div><div class="tablewrap pro"><table class="sheet pro"><thead><tr>' + (sec.edit ? '<th>إجراء</th>' : '') +
         heads.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>';
       if (!sec.rows.length) html += '<tr><td colspan="' + (heads.length + 1) + '" class="emptyrow">لا توجد سجلات حالياً ✓</td></tr>';
       sec.rows.forEach(function (r, ri) {
-        html += '<tr class="data">' + (sec.edit ? '<td class="act"><button class="btn small" data-edit="' + si + ':' + ri + '">✏️ قرار / تعديل</button></td>' : '') + r.cells.map(function (c, ci) {
+        html += '<tr class="data"' + (di >= 0 ? ' data-d="' + esc(toISO(txt(r.cells[di]))) + '"' : '') + '>' + (sec.edit ? '<td class="act"><button class="btn small" data-edit="' + si + ':' + ri + '">✏️ قرار / تعديل</button></td>' : '') + r.cells.map(function (c, ci) {
           var t = txt(c);
           return '<td data-label="' + esc(heads[ci]) + '"' + (t === '' ? ' class="empty"' : '') + '>' + cellHtml(c, heads[ci]) + '</td>';
         }).join('') + '</tr>';
@@ -509,6 +592,7 @@
     }
     function draw(v) {
       V = v;
+      v.sections.forEach(waFix);
       var texts = [], body = '';
       v.sections.forEach(function (sec, si) {
         if (sec.type === 'text') { if (body) body += '<h2 class="sub">' + esc(sec.text) + '</h2>'; else texts.push(sec.text); return; }
@@ -525,24 +609,24 @@
         '<div class="vtools"><button class="btn small ghost" id="ref">↻ تحديث</button>' +
         (meta.url ? '<a class="btn small ghost" target="_blank" rel="noopener" href="' + esc(meta.url) + '">فتح الملف</a>' : '') + '</div></div>' +
         (texts.length ? '<details class="hint"><summary>ℹ️ طريقة الاستخدام</summary>' + texts.map(function (t) { return '<p>' + esc(t) + '</p>'; }).join('') + '</details>' : '') +
-        (v.date ? dateBar(v.date) : '') +
+        (v.date ? dateBar(v.date) : filterBar(v)) +
         '<div class="toolbar"><input type="search" id="q" placeholder="🔎 ابحث في هذه اللوحة باسم طالب أو معلم…"></div><div id="nores" class="warnbox hidden">لا توجد نتائج لهذا البحث في هذه اللوحة</div>' +
-        '<div class="muted small">آخر تحديث: ' + esc(fmtTime(v.updatedAt)) + '</div>' + body;
+        '<div class="muted small">آخر تحديث: ' + esc(fmtTime(v.updatedAt)) + '</div>' + body +
+        (ABS_IN[key] && hasView('abs_today') ? '<div id="absbox"></div>' : '');
       h(html);
+      absBox(v);
       var q = document.getElementById('q');
-      q.oninput = function () {
-        var s = q.value.trim();
-        var shown = 0, all = $app.querySelectorAll('tr.data');
-        all.forEach(function (tr) { var on = !s || tr.textContent.indexOf(s) >= 0; tr.style.display = on ? '' : 'none'; if (on) shown++; });
-        document.getElementById('nores').classList.toggle('hidden', !s || shown > 0 || !all.length);
-      };
+      q.oninput = applyFilter;
+      var fs = document.getElementById('fsel'); if (fs) fs.onchange = applyFilter;
       document.getElementById('ref').onclick = function () {
         var b = this; b.disabled = true; b.textContent = '⏳ جارٍ التحديث…'; refreshing = true; load();
       };
       var ds = document.getElementById('dsel');
       if (ds) ds.onchange = function () {
         ds.disabled = true; toast('جارٍ تغيير التاريخ…');
-        api('setDate', { viewKey: key, date: ds.value }, 60000).then(function () { load(); })
+        // لوحات الغياب كلها تتبع التاريخ نفسه (التقرير اليومي + اليوم + المعلمون اليوم)
+        var ks = [key]; ['abs_daily', 'abs_today'].forEach(function (k) { if (k !== key && !(k === 'abs_today' && key === 'abs_teach') && hasView(k)) ks.push(k); });
+        ks.reduce(function (p, k) { return p.then(function () { return api('setDate', { viewKey: k, date: ds.value }, 60000); }); }, Promise.resolve()).then(function () { load(); })
           .catch(function (e) { ds.disabled = false; if (e.auth) return logout(true); toast(e.net ? 'تعذر الاتصال' : e.message); });
       };
       $app.querySelectorAll('[data-edit]').forEach(function (b) {
