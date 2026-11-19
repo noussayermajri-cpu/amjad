@@ -1013,6 +1013,16 @@
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; ib.classList.remove('hidden'); });
   ib.onclick = function () { if (!deferred) return; deferred.prompt(); deferred.userChoice.then(function () { deferred = null; ib.classList.add('hidden'); }); };
   if ('serviceWorker' in navigator) window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+  // تحديث تلقائي: عند نشر نسخة جديدة يُعاد تحميل التطبيق (إلا أثناء تعبئة نموذج فيُؤجَّل للعودة للرئيسية)
+  if ('serviceWorker' in navigator) {
+    var hadCtl = !!navigator.serviceWorker.controller, pendingReload = false;
+    var doReload = function () { if (/^#\/form\//.test(location.hash || '') || state.sending) { pendingReload = true; return; } location.reload(); };
+    navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadCtl) doReload(); hadCtl = true; });
+    window.addEventListener('hashchange', function () { if (pendingReload && !/^#\/form\//.test(location.hash || '')) location.reload(); });
+    var checkUpd = function () { navigator.serviceWorker.getRegistration().then(function (r) { if (r) r.update(); }).catch(function () {}); };
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) checkUpd(); });
+    setInterval(checkUpd, 10 * 60 * 1000);
+  }
 
   route(); refreshMe(); flushOutbox();
   window.__amjad = { state: state, outbox: outbox, flushOutbox: flushOutbox }; // للاختبار
