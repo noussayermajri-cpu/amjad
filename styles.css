@@ -178,3 +178,29 @@ table.sheet.pro td.act{white-space:nowrap;width:1%}
 .kvgrid div{display:flex;justify-content:space-between;gap:10px;border:1px solid #e1e8ec;border-radius:8px;padding:7px 10px;background:#f9fbf7}
 .kvgrid span{color:#3f5a2a;font-weight:800}
 .kvgrid b{text-align:left}
+
+/* تقارير الأداء */
+.ptabs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.pcustom{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.pcustom input{font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px}
+.pks{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:6px 0}
+.pk{border:1px solid #cfe3ee;border-radius:10px;padding:8px;text-align:center;display:flex;flex-direction:column;gap:2px;background:#fff}
+.pk span{font-size:12px;color:#4b5a63;font-weight:700}
+.pk b{font-size:24px;color:#1A9BD7}
+.dl{font-style:normal;font-size:12px;font-weight:800}
+.dl.up{color:#2e7d32}.dl.down{color:#c62828}.dl.eq{color:#78909c}
+.bars{display:flex;flex-direction:column;gap:5px}
+.bar{display:grid;grid-template-columns:110px 1fr 120px;gap:8px;align-items:center;font-size:13px}
+.bar div{background:#eef4f7;border-radius:6px;height:14px;overflow:hidden}
+.bar i{display:block;height:100%;background:#8DB56B}
+.bar b{font-weight:700}
+.neg{color:#c62828}
+@media print{
+  header,nav,#netbar,.noprint,#toast,.back{display:none!important}
+  body{background:#fff}
+  main{max-width:none!important;padding:0!important}
+  .rep{border:none;padding:0}
+  .repbar,.reptitle,.bar i{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+
+.tile.report{border-color:#1A9BD7;background:linear-gradient(135deg,#e8f4fb,#f3f7f0)}

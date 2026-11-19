@@ -142,12 +142,126 @@
     b.onclick = go; e.onkeydown = function (ev) { if (ev.key === 'Enter') go(); };
   }
 
+  // ---------- تقارير الأداء: أسبوعي / شهري ----------
+  function viewReport() {
+    var MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    var iso = function (x) { return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+    var add = function (x, n) { return new Date(x.getFullYear(), x.getMonth(), x.getDate() + n); };
+    var fmt = function (s) { var p = s.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+    var t0 = new Date(); t0 = new Date(t0.getFullYear(), t0.getMonth(), t0.getDate());
+    var sun = add(t0, -t0.getDay()); // الأسبوع الدراسي: الأحد – الخميس
+    function range(kind) {
+      if (kind === 'week') return { title: 'التقرير الأسبوعي', sub: 'الأسبوع الحالي', from: iso(sun), to: iso(add(sun, 4)), pfrom: iso(add(sun, -7)), pto: iso(add(sun, -3)), pname: 'الأسبوع السابق' };
+      if (kind === 'pweek') return { title: 'التقرير الأسبوعي', sub: 'الأسبوع الماضي', from: iso(add(sun, -7)), to: iso(add(sun, -3)), pfrom: iso(add(sun, -14)), pto: iso(add(sun, -10)), pname: 'الأسبوع الذي قبله' };
+      var y = t0.getFullYear(), mo = t0.getMonth() - (kind === 'pmonth' ? 1 : 0);
+      var a = new Date(y, mo, 1), b = new Date(y, mo + 1, 0), pa = new Date(y, mo - 1, 1), pb = new Date(y, mo, 0);
+      return { title: 'التقرير الشهري', sub: 'شهر ' + MONTHS[a.getMonth()] + ' ' + a.getFullYear(), from: iso(a), to: iso(b), pfrom: iso(pa), pto: iso(pb), pname: 'شهر ' + MONTHS[pa.getMonth()] };
+    }
+    function custom(f, t) {
+      var a = new Date(f), b = new Date(t), n = Math.round((b - a) / 864e5) + 1;
+      return { title: 'تقرير أداء الفترة', sub: 'من ' + fmt(f) + ' إلى ' + fmt(t), from: f, to: t, pfrom: iso(add(new Date(a.getFullYear(), a.getMonth(), a.getDate()), -n)), pto: iso(add(new Date(a.getFullYear(), a.getMonth(), a.getDate()), -1)), pname: 'الفترة السابقة بنفس الطول' };
+    }
+    var kind = get('perfKind', 'week'), R = kind === 'custom' ? null : range(kind);
+    var tabs = [['week', 'هذا الأسبوع'], ['pweek', 'الأسبوع الماضي'], ['month', 'هذا الشهر'], ['pmonth', 'الشهر الماضي'], ['custom', 'فترة مخصصة']];
+    h('<div class="noprint"><button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button>' +
+      '<div class="ptabs">' + tabs.map(function (x) { return '<button class="btn small ' + (x[0] === kind ? '' : 'ghost') + '" data-k="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="pcustom ' + (kind === 'custom' ? '' : 'hidden') + '"><label>من <input type="date" id="pf" value="' + iso(add(t0, -30)) + '"></label><label>إلى <input type="date" id="pt" value="' + iso(t0) + '"></label><button class="btn small" id="pgo">عرض</button></div>' +
+      '<div class="vtools"><button class="btn small ghost" id="pprint">🖨️ طباعة / حفظ PDF</button></div></div><div id="pbody"></div>');
+    Array.prototype.forEach.call($app.querySelectorAll('.ptabs [data-k]'), function (b) {
+      b.onclick = function () { set('perfKind', b.getAttribute('data-k')); viewReport(); };
+    });
+    document.getElementById('pprint').onclick = function () { window.print(); };
+    var go = document.getElementById('pgo');
+    if (go) go.onclick = function () {
+      var f = document.getElementById('pf').value, t = document.getElementById('pt').value;
+      if (!f || !t || f > t) { toast('اختر تاريخ بداية ونهاية صحيحين'); return; }
+      load(custom(f, t));
+    };
+    if (R) load(R); else document.getElementById('pbody').innerHTML = '<div class="infoline">اختر تاريخ البداية والنهاية ثم اضغط «عرض».</div>';
+
+    function load(R) {
+      var box = document.getElementById('pbody');
+      box.innerHTML = '<div class="loading">جارٍ إعداد التقرير… (قد يستغرق 20 ثانية)</div>';
+      api('perf', { from: R.from, to: R.to, pfrom: R.pfrom, pto: R.pto }, 120000).then(function (j) {
+        if (!document.getElementById('pbody')) return;
+        draw(R, j.cur, j.prev);
+      }).catch(function (e) {
+        if (e.auth) return logout(true);
+        var b = document.getElementById('pbody'); if (b) b.innerHTML = '<div class="err">' + esc(e.net ? 'تعذر الاتصال، حاول مرة أخرى' : e.message) + '</div>';
+      });
+    }
+    function num(v, pct) { return v === null || v === undefined ? '—' : (pct ? v + '%' : String(v)); }
+    function delta(c, p, goodUp, pct) {
+      if (c === null || p === null || p === undefined || c === undefined) return '';
+      var d = Math.round((c - p) * 10) / 10; if (!d) return '<i class="dl eq">= بدون تغيير</i>';
+      var good = goodUp ? d > 0 : d < 0;
+      return '<i class="dl ' + (good ? 'up' : 'down') + '">' + (d > 0 ? '▲ ' : '▼ ') + Math.abs(d) + (pct ? '%' : '') + '</i>';
+    }
+    function kpi(label, c, p, goodUp, pct) {
+      return '<div class="pk"><span>' + esc(label) + '</span><b dir="ltr">' + num(c, pct) + '</b>' + delta(c, p, goodUp, pct) + '</div>';
+    }
+    function tbl(head, rows) {
+      if (!rows.length) return '<div class="infoline">لا توجد بيانات في هذه الفترة</div>';
+      return '<div class="repwrap"><table class="rept"><thead><tr>' + head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        rows.map(function (r) { return '<tr>' + r.map(function (x) { return '<td>' + x + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+    }
+    function name(k) { return esc(String(k).replace(/^\S+\s*-\s*/, '')); }
+    function cls(k) { return esc(String(k).split(' - ')[0]); }
+    function draw(R, c, p) {
+      p = p || {};
+      var pb = p.beh || {}, pt = p.teach || {}, pv = p.viol || {};
+      var DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      var html = '<div class="rep perf"><div class="rephead"><img src="icons/icon-512.png" alt=""><div><b>مدارس الأمجاد العالمية</b><span>AL-AMJAD INTERNATIONAL SCHOOLS</span><i>Learning for the life</i></div><em class="conf" style="color:#1A9BD7">وكالة شؤون الطلاب<br>قسم البنين</em></div>' +
+        '<div class="reptitle">' + esc(R.title) + ' – ' + esc(R.sub) + '</div>' +
+        '<div class="repsub">الفترة: من ' + fmt(c.from) + ' إلى ' + fmt(c.to) + '  |  أيام الدراسة المرصودة: ' + c.schoolDays + '  |  عدد الطلاب: ' + c.students + '  |  المقارنة مع: ' + esc(R.pname) + '</div>';
+      if (!c.schoolDays) html += '<div class="warnbox">لا يوجد رصد غياب في هذه الفترة بعد.</div>';
+      html += '<div class="repbar">أولاً: الملخص العام</div><div class="pks">' +
+        kpi('نسبة حضور الطلاب', c.attendance, p.attendance, true, true) +
+        kpi('أيام غياب (يوم كامل)', c.absDays, p.absDays, false) +
+        kpi('غياب عن حصص (طالب/يوم)', c.partial, p.partial, false) +
+        kpi('حالات التأخر', c.lates, p.lates, false) +
+        kpi('طلاب غابوا 3 أيام فأكثر', c.chronic, p.chronic, false) +
+        kpi('التزام المعلمين بالرصد', c.teach.rate, pt.rate, true, true) +
+        kpi('المشكلات السلوكية', c.beh.problems, pb.problems, false) +
+        kpi('السلوك المتميز', c.beh.distinct, pb.distinct, true) +
+        kpi('مخالفات المعلمين', c.viol.n, pv.n, false) + '</div>';
+      html += '<div class="repbar">ثانياً: الحضور حسب الفصل</div>' + tbl(['الفصل', 'الطلاب', 'أيام الغياب', 'غياب عن حصص', 'التأخر', 'نسبة الحضور'],
+        c.classes.map(function (x) {
+          var pc = (p.classes || []).filter(function (y) { return y.c === x.c; })[0];
+          return [esc(x.c), x.n, x.abs, x.partial, x.late, '<b>' + num(x.rate, true) + '</b> ' + delta(x.rate, pc ? pc.rate : null, true, true)];
+        }));
+      var mx = Math.max.apply(null, c.daily.map(function (x) { return x.abs; }).concat([1]));
+      html += '<div class="repbar">ثالثاً: الغياب اليومي</div>' + (c.daily.length ? '<div class="bars">' + c.daily.map(function (x) {
+        var pp = x.d.split('-'), wd = DAYS[new Date(+pp[0], +pp[1] - 1, +pp[2]).getDay()];
+        return '<div class="bar"><span>' + wd + ' ' + pp[2] + '/' + pp[1] + (x.d === iso(t0) ? ' (حتى الآن)' : '') + '</span><div><i style="width:' + Math.round(100 * x.abs / mx) + '%"></i></div><b>' + x.abs + ' غائب · ' + num(x.rate, true) + '</b></div>';
+      }).join('') + '</div>' : '<div class="infoline">لا توجد بيانات</div>');
+      html += '<div class="repbar">رابعاً: الطلاب الأكثر غياباً</div>' + tbl(['الطالب', 'الصف', 'أيام الغياب', 'غياب عن حصص', 'التأخر'],
+        c.top.map(function (x) { return [name(x.s), cls(x.s), '<b>' + x.abs + '</b>', x.partial, x.late]; }));
+      html += '<div class="repbar">خامساً: التزام المعلمين برصد الغياب</div>' +
+        (c.teach.days ? '<div class="repsub">محسوب على ' + c.teach.days + ' يوم رُصد من التطبيق (الأيام المُدخلة من السجل الورقي واليوم الجاري لا تدخل): ' + c.teach.rec + ' حصة مرصودة من ' + c.teach.sched + '</div>' +
+          tbl(['المعلم', 'حصص الجدول', 'الحصص المرصودة', 'لم تُرصد', 'نسبة الالتزام'], c.teach.list.map(function (x) {
+            return [esc(x.t), x.sched, x.rec, x.sched - x.rec ? '<b class="neg">' + (x.sched - x.rec) + '</b>' : '0', '<b>' + x.rate + '%</b>'];
+          })) : '<div class="infoline">لا توجد أيام مرصودة من التطبيق في هذه الفترة</div>');
+      var b = c.beh;
+      html += '<div class="repbar">سادساً: السلوك</div><div class="pks">' +
+        kpi('د1', b.deg[0], (pb.deg || [])[0], false) + kpi('د2', b.deg[1], (pb.deg || [])[1], false) + kpi('د3', b.deg[2], (pb.deg || [])[2], false) +
+        kpi('د4', b.deg[3], (pb.deg || [])[3], false) + kpi('د5', b.deg[4], (pb.deg || [])[4], false) +
+        kpi('حالات مفتوحة', b.open, pb.open, false) + kpi('إحالات للموجه/اللجنة', b.referred, pb.referred, false) + kpi('درجات محسومة', b.deducted, pb.deducted, false) + kpi('ملاحظات عامة', b.notes, pb.notes, false) + '</div>' +
+        (b.top.length ? '<div class="repsub">الطلاب الأكثر مشكلات في الفترة</div>' + tbl(['الطالب', 'الصف', 'عدد المشكلات'], b.top.map(function (x) { return [name(x.s), cls(x.s), x.n]; })) : '');
+      html += '<div class="repbar">سابعاً: متابعة المعلمين</div><div class="pks">' + kpi('مخالفات مرصودة', c.viol.n, pv.n, false) + kpi('اتُّخذ فيها قرار', c.viol.decided, pv.decided, true) + '</div>' +
+        (c.viol.list.length ? tbl(['المعلم', 'عدد المخالفات'], c.viol.list.map(function (x) { return [esc(x.t), x.n]; })) : '');
+      html += '<div class="repsub" style="margin-top:14px">أُعدّ التقرير آلياً من سجلات الغياب والسلوك ومتابعة المعلمين بتاريخ ' + fmt(iso(new Date())) + ' – الأسهم الخضراء تحسّن والحمراء تراجع مقارنة بـ' + esc(R.pname) + '.</div></div>';
+      document.getElementById('pbody').innerHTML = html;
+    }
+  }
+
   // ---------- الرئيسية ----------
   function viewHome() {
     var u = state.user || {}, m = state.menu || { forms: [], views: [] };
     var html = '<div class="card userline"><div><b>' + esc(u.name || u.email) + '</b><div class="muted" dir="ltr" style="text-align:right">' + esc(u.email) + '</div></div>' +
       '<div><span class="role">' + esc(u.roleLabel || '') + '</span> <button id="out" class="btn small ghost">خروج</button></div></div>';
     html += '<div id="alerts"></div><div id="kpis"></div>';
+    if (m.reports || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/report">📊 تقارير الأداء (أسبوعي / شهري)<small>قياس المدرسة في الأسبوع والشهر ومقارنتها بالفترة السابقة</small></a></div>';
     if (m.forms.length) {
       html += '<h2>الإدخال</h2><div class="grid">' + m.forms.map(function (f) {
         return '<a class="tile form" href="#/form/' + f.key + '">' + esc(f.title) + '<small>' + formHint(f.key) + '</small></a>';
@@ -869,7 +983,7 @@
   // ---------- التوجيه ----------
   function route() {
     renderNetbar();
-    document.body.classList.toggle('wide', /^#\/view\//.test(location.hash || ''));
+    document.body.classList.toggle('wide', /^#\/(view|report)\b/.test(location.hash || ''));
     var hash = location.hash || '#/home';
     if (!state.token) { return viewLogin('email'); }
     var m = hash.match(/^#\/(\w+)(?:\/([\w-]+))?/) || [];
@@ -879,6 +993,7 @@
     }
     if (m[1] === 'view' && m[2]) return viewSheet(m[2]);
     if (m[1] === 'outbox') return viewOutbox();
+    if (m[1] === 'report') return viewReport();
     return viewHome();
   }
   window.addEventListener('hashchange', function () { if (!state.sending) route(); });
