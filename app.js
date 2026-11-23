@@ -530,7 +530,7 @@
         return '<div class="check' + (on ? ' on' : '') + '" data-id="' + it.id + '" data-i="' + i + '" role="checkbox" aria-checked="' + on + '" tabindex="0"><span class="box">' + (on ? '✓' : '') + '</span><span class="lbl">' + esc(c.v) + '</span></div>';
       }).join('') + '</div><div class="selcount" id="cnt_' + it.id + '">' + (sel.length ? 'تم اختيار ' + sel.length : '') + '</div>';
     } else if (it.type === 'paragraph') {
-      body = '<textarea data-id="' + it.id + '">' + esc(a || '') + '</textarea>';
+      body = '<textarea data-id="' + it.id + '">' + esc(a || '') + '</textarea>' + (F.key === 'behavior' && /^وصف الموقف/.test(it.title) ? '<div class="sugg" data-sugg="' + it.id + '"></div>' : '');
     } else if (it.type === 'date') {
       if (isEmpty(a)) { a = todayISO(); F.answers[it.id] = a; }
       body = '<input type="date" data-id="' + it.id + '" value="' + esc(a) + '">';
@@ -591,6 +591,159 @@
       };
       inp.oninput = apply; apply();
     });
+    behSuggest(page);
+  }
+
+  // ===== مصنّف المشكلات السلوكية بالكلمات المفتاحية (بدون ذكاء اصطناعي) =====
+  var AMJ_SYN = [
+    ['تاخر متاخر اتاخر تاخير متاخرا', 'تاخر'],
+    ['هرب هروب يهرب شرد زوغ تزويغ طفش', 'هروب'],
+    ['ضرب ضربه يضرب لكم لكمه صفع كف ركل رفس دفع دفعه اعتدي اعتداء عض خنق', 'ضرب'],
+    ['شتم يشتم سب يسب سبه شتيمه شتائم بذيء بذيئه بذيئا وقاحه لعن يلعن الفاظ', 'نابيه الفاظ'],
+    ['سخر يسخر سخريه استهزا يستهزئ استهزاء يتمسخر تريق يتريق', 'سخريه'],
+    ['تنمر يتنمر', 'تنمر'],
+    ['هدد يهدد تهديد توعد', 'تهديد'],
+    ['نام نايم ينام نوم نعسان', 'نوم'],
+    ['اكل ياكل شرب يشرب علك علكه شيبس حلويات اكله سندويش عصير', 'اطعمه مشروبات'],
+    ['زي ثوب شماغ غتره لبس ملابس بنطلون تيشيرت جاكيت قبعه كاب شعر قصه', 'زي'],
+    ['صور يصور صوره تصوير فيديو مقطع سجل يسجل تسجيل جوال جواله موبايل هاتف تلفون', 'تصوير تسجيل'],
+    ['سرق يسرق سرقه سارق', 'سرقه'],
+    ['كسر يكسر خرب يخرب تخريب اتلف اتلاف حطم طاوله كرسي باب زجاج سبوره', 'اتلاف تجهيزات ضرر مباني'],
+    ['خربش جدار الجدار جدران الجدران', 'جدران عبث تجهيزات'],
+    ['حصه الحصه حصص الحصص', 'حصه حصص'],
+    ['يتكلم يتحدث سوالف يسولف يقاطع مقاطعه', 'حديث جانبي مقاطعه'],
+    ['فوضي ازعاج ازعج يزعج صراخ صرخ يصرخ شغب دوشه ضجه هرج لعب يلعب مشاغب', 'فوضي'],
+    ['هوشه مضاربه تضارب عراك تعارك مشاجره تشاجر تهاوش اشتبك', 'شجار مضاربه'],
+    ['دخان سيجاره سجائر سيجاره سيقاره فيب شيشه معسل', 'سجائر'],
+    ['يدخن تدخين دخن مدخن', 'تدخين'],
+    ['سكين سكينه سكاكين موس شفره مشرط', 'اله حاده سكاكين'],
+    ['مسدس سلاح رصاص', 'اسلحه'],
+    ['مخدرات حبوب حشيش مخدر', 'مخدرات'],
+    ['طابور اصطفاف', 'اصطفاف'],
+    ['خرج طلع يطلع خروج', 'خروج'],
+    ['دخل يدخل', 'دخول'],
+    ['اذن استئذان استاذان', 'استئذان'],
+    ['مزق يمزق رمي', 'امتهان كتب'],
+    ['وقع توقيع زور تزوير', 'توقيع'],
+    ['تحرش يتحرش', 'تحرش'],
+    ['نار ولع ولاعه حرق اشعل', 'اشعال النار'],
+    ['مفرقعات طراطيع بخاخ العاب ناريه', 'خطره العاب'],
+    ['بوابه البوابه', 'بوابه'],
+    ['معلم المعلم معلمه الاستاذ استاذ مدرس اداري الوكيل المدير منسوبي', 'المعلمين'],
+    ['افتراضي افتراضيه منصه مدرستي تيمز اونلاين بعد', 'افتراضيه'],
+    ['ابتزاز ابتز يبتز', 'ابتزاز'],
+    ['الدين الاسلام الصلاه القران', 'شعائر الاسلام'],
+    ['الدوله الملك الوطن', 'الدوله رموزها'],
+    ['عنصريه قبيله قبليه', 'عنصريه'],
+    ['غاب يغب غياب حضر يحضر', 'حضور']
+  ];
+  var AMJ_STOP = ' في من علي عن الي الطالب طالب مع او و ثم كان قام بعد قبل اثناء هذا هذه ذلك التي الذي ما لا لم لن قد كل اي حال داخل اليوم وقت زميل زميله زملاء زملاءه ';
+  var AMJ_PHR = [
+    [/(طلع|خرج|هرب|شرد)\s+(من\s+)?(المدرسه|الدوام|المبني)/, 'هروب مدرسه', 'خروج طلع خرج استيذان اذن'],
+    [/كتب\s+(علي\s+)?(ال)?جدار/, 'جدران عبث تجهيزات'],
+    [/(بدون|بلا|غير|دون)\s+(اذن|استئذان)/, 'استئذان'],
+    [/(ما|لم)\s+(يحضر|حضر|يدخل|دخل)\s+(ال)?(حصه|حصص)/, 'عدم حضور حصه'],
+    [/(ما|لم)\s+(يحضر|حضر)\s+(ال)?(طابور|اصطفاف)/, 'عدم حضور اصطفاف'],
+    [/تاخر\s+(عن|في|علي)?\s*(ال)?(حصه|حصص|درس)/, 'تاخر دخول حصص'],
+    [/فصل\s+(اخر|ثاني|ثان)/, 'فصل اخر'],
+    [/(معه|بحوزته|عنده|شنطته|جيبه|حقيبته)/, 'حيازه']
+  ];
+  function amjNorm_(s) {
+    return String(s || '').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+      .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي').replace(/[^\u0621-\u064Aa-z0-9]+/gi, ' ').trim();
+  }
+  function amjStem_(w) {
+    if (w.length > 4 && /^(وال|بال|فال|كال)/.test(w)) w = w.slice(3);
+    else if (w.length > 3 && /^(ال|لل)/.test(w)) w = w.slice(2);
+    else if (w.length > 4 && w[0] === 'و') w = w.slice(1);
+    if (w.length > 5 && /(ات|ين|ون|هم|ها)$/.test(w)) w = w.slice(0, -2);
+    else if (w.length > 4 && /[هي]$/.test(w)) w = w.slice(0, -1);
+    return w;
+  }
+  function amjToks_(s, syn) {
+    var ns = amjNorm_(s), words = ns.split(' ').filter(Boolean), out = [], drop = [], strong = [];
+    if (syn) AMJ_PHR.forEach(function (p) { if (p[0].test(ns)) { amjNorm_(p[1]).split(' ').forEach(function (c) { out.push(c); strong.push(c); }); if (p[2]) drop = drop.concat(p[2].split(' ')); } });
+    words.forEach(function (w) {
+      if (syn) AMJ_SYN.forEach(function (p) {
+        var keys = amjNorm_(p[0]).split(' ');
+        if (keys.indexOf(w) >= 0 || keys.indexOf(amjStem_(w)) >= 0 || (w.length > 4 && keys.indexOf(w.replace(/^(و|ف|ب)/, '')) >= 0))
+          amjNorm_(p[1]).split(' ').forEach(function (c) { out.push(c); });
+      });
+      out.push(w);
+    });
+    var res = out.map(amjStem_).filter(function (w) { return w.length > 1 && AMJ_STOP.indexOf(' ' + w + ' ') < 0 && drop.indexOf(w) < 0; })
+      .filter(function (w, i, a) { return a.indexOf(w) === i; });
+    res.strong = strong.map(amjStem_);
+    return res;
+  }
+  function amjHit_(q, L) {
+    for (var i = 0; i < L.length; i++) {
+      var l = L[i];
+      if (l === q) return true;
+      if (q.length >= 3 && l.length >= 3 && (l.indexOf(q) === 0 || q.indexOf(l) === 0) && Math.abs(l.length - q.length) <= 2) return true;
+    }
+    return false;
+  }
+  /** يرجع أقرب المشكلات من القائمة لوصف الموقف: [{label, score}] */
+  function amjSuggest(desc, labels, n) {
+    var Q = amjToks_(desc, true); if (!Q.length) return [];
+    var nd = amjNorm_(desc);
+    var online = /افتراض|منصه|مدرستي|تيمز|اونلاين|عن بعد/.test(nd);
+    var staff = /معلم|استاذ|مدرس|اداري|الوكيل|المدير|منسوب/.test(nd) && /ضرب|سخر|استهز|هدد|تهديد|شتم|سب|وقاح|صور|تصوير|ابتز|الفاظ|بذي|اعتد|وقع|توقيع|سرق|اتلف|كسر/.test(nd);
+    var LT = labels.map(function (l) { return amjToks_(String(l).replace(/^\([^)]*\)\s*/, ''), false); });
+    var df = {}; Q.forEach(function (q) { df[q] = 0; LT.forEach(function (L) { if (amjHit_(q, L)) df[q]++; }); });
+    var N = labels.length;
+    var res = labels.map(function (lab, i) {
+      var L = LT[i], s = 0, hits = 0;
+      Q.forEach(function (q) { if (df[q] && amjHit_(q, L)) { s += Math.log(1 + N / df[q]) * ((Q.strong || []).indexOf(q) >= 0 ? 1.8 : 1); hits++; } });
+      if (!hits) return { label: lab, score: 0 };
+      s = s / (1 + 0.04 * L.length);
+      var isOn = /عن بعد/.test(lab), isStaff = /المعلمين|منسوبي المدرسه|منسوبي المدرسة/.test(lab);
+      if (isOn !== online) s *= 0.45;
+      if (isStaff && !staff) s *= 0.5;
+      if (!isStaff && staff) s *= 0.5;
+      return { label: lab, score: Math.round(s * 100) / 100 };
+    }).filter(function (r) { return r.score >= 0.9; }).sort(function (a, b) { return b.score - a.score; });
+    return res.slice(0, n || 3);
+  }
+
+  // ---------- اقتراح تصنيف المشكلة السلوكية من وصف المعلم (كلمات مفتاحية – بدون ذكاء اصطناعي) ----------
+  function behSuggest(page) {
+    if (F.key !== 'behavior') return;
+    var pick = function (re, needChoices) { return page.items.filter(function (it) { return re.test(it.title || '') && (!needChoices || it.choices); })[0]; };
+    var desc = pick(/^وصف الموقف/), prob = pick(/^المشكلة السلوكية/, true), typ = pick(/^نوع الملاحظة/, true);
+    if (!desc || !prob) return;
+    var ta = $app.querySelector('textarea[data-id="' + desc.id + '"]'), box = $app.querySelector('[data-sugg="' + desc.id + '"]');
+    if (!ta || !box) return;
+    var labels = prob.choices.map(function (c) { return c.v; });
+    var draw = function () {
+      var txt = ta.value.trim();
+      if (txt.length < 4 || (typ && F.answers[typ.id] && !/مشكلة/.test(F.answers[typ.id]))) { box.innerHTML = ''; return; }
+      var list = amjSuggest(txt, labels, 3);
+      if (!list.length) { box.innerHTML = '<div class="help" style="margin-top:6px">لم يُعثر على تصنيف مناسب — اختر المشكلة من القائمة أعلاه.</div>'; return; }
+      box.innerHTML = '<div class="help" style="margin-top:6px">🔎 تصنيف مقترح من الوصف — اضغط لاختياره:</div>' + list.map(function (r, i) {
+        var on = F.answers[prob.id] === r.label;
+        return '<button type="button" class="pill' + (on ? ' on' : '') + '" data-sg="' + i + '" style="display:block;width:100%;text-align:right;margin:4px 0;white-space:normal;line-height:1.5">' + (on ? '✓ ' : '') + esc(r.label) + '</button>';
+      }).join('');
+      Array.prototype.forEach.call(box.querySelectorAll('[data-sg]'), function (b) {
+        b.onclick = function () {
+          var lab = list[+b.getAttribute('data-sg')].label;
+          F.answers[prob.id] = lab;
+          var sel = $app.querySelector('select[data-id="' + prob.id + '"]'); if (sel) sel.value = lab;
+          if (typ) {
+            var pc = typ.choices.filter(function (c) { return /مشكلة/.test(c.v); })[0];
+            if (pc && F.answers[typ.id] !== pc.v) {
+              F.answers[typ.id] = pc.v;
+              Array.prototype.forEach.call($app.querySelectorAll('.pill[data-id="' + typ.id + '"]'), function (p) { p.classList.toggle('on', typ.choices[+p.dataset.i].v === pc.v); });
+              var ts = $app.querySelector('select[data-id="' + typ.id + '"]'); if (ts) ts.value = pc.v;
+            }
+          }
+          saveDraft(); draw(); toast('تم اختيار المشكلة ✓');
+        };
+      });
+    };
+    var tmr; ta.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(draw, 300); });
+    draw();
   }
 
   function validatePage() {
