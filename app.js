@@ -255,12 +255,114 @@
     }
   }
 
+  // ---------- حصص الانتظار ----------
+  function viewSubs() {
+    var d0 = todayISO();
+    var S = { date: d0, teachers: [], absent: {}, slots: null, saved: [] };
+    h('<div class="noprint"><button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button>' +
+      '<h2>🔄 حصص الانتظار</h2>' +
+      '<div class="card"><label>التاريخ <input type="date" id="sd" value="' + d0 + '"></label> <span id="sday" class="muted"></span>' +
+      '<p class="muted" style="margin:.5em 0">حدّد المعلمين الغائبين ثم اضغط «توزيع تلقائي». الأولوية للأقل نصاباً في اليوم، وحصة واحدة لكل معلم، ورضا نبهان وياسر شبل آخر خيار.</p>' +
+      '<div id="st" class="subs-t">جارٍ التحميل…</div>' +
+      '<div class="vtools"><button class="btn" id="sgo">⚙️ توزيع تلقائي</button></div></div></div>' +
+      '<div id="sres"></div>');
+    var $st = document.getElementById('st'), $res = document.getElementById('sres');
+    function load() {
+      $st.textContent = 'جارٍ التحميل…'; $res.innerHTML = '';
+      api('subGet', { date: S.date }).then(function (j) {
+        S.teachers = j.teachers; S.saved = j.saved || []; S.absent = {};
+        document.getElementById('sday').textContent = j.day + (j.holiday ? ' — إجازة' : '');
+        S.saved.forEach(function (r) { S.absent[r.t] = 1; });
+        $st.innerHTML = j.teachers.map(function (x) {
+          return '<label class="chk" style="display:inline-block;min-width:12em;margin:.2em .4em"><input type="checkbox" data-t="' + esc(x.t) + '"' + (S.absent[x.t] ? ' checked' : '') + '> ' + esc(x.t) +
+            ' <small class="muted">(' + x.load + ' حصص' + (x.prot ? ' · مستثنى' : '') + ')</small></label>';
+        }).join('');
+        Array.prototype.forEach.call($st.querySelectorAll('input[data-t]'), function (c) {
+          c.onchange = function () { if (c.checked) S.absent[c.getAttribute('data-t')] = 1; else delete S.absent[c.getAttribute('data-t')]; };
+        });
+        if (S.saved.length) renderSaved();
+      }).catch(function (e) { if (e.auth) return logout(true); $st.textContent = e.message; });
+    }
+    function renderSaved() {
+      $res.innerHTML = '<div class="card"><h3>✅ التوزيع المعتمد ليوم ' + esc(S.date) + '</h3>' + table(S.saved, false) +
+        '<div class="vtools noprint"><button class="btn small ghost" id="sprint">🖨️ طباعة</button></div></div>';
+      document.getElementById('sprint').onclick = function () { window.print(); };
+    }
+    function table(rows, edit) {
+      return '<div class="tscroll"><table class="vt"><thead><tr><th>الحصة</th><th>الفصل</th><th>المادة</th><th>المعلم الغائب</th><th>المعلم المنتظر</th></tr></thead><tbody>' +
+        rows.map(function (r, i) {
+          var cell;
+          if (edit) {
+            cell = '<select data-i="' + i + '"><option value="">— لم يُسند —</option>' + r.free.map(function (f) {
+              return '<option value="' + esc(f.t) + '"' + (f.t === r.sub ? ' selected' : '') + '>' + esc(f.t) + ' (' + f.load + ')' + (f.prot ? ' · مستثنى' : '') + '</option>';
+            }).join('') + '</select> <span class="xb" data-x="' + i + '"></span>';
+          } else cell = esc(r.sub) + (r.extreme ? ' <b style="color:#c0392b">⚠ حالة قصوى</b>' : '');
+          return '<tr><td>' + r.p + '</td><td>' + esc(r.c) + '</td><td>' + esc(r.s) + '</td><td>' + esc(r.t) + '</td><td>' + cell + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    function recount() {
+      var cnt = {};
+      S.slots.forEach(function (r) { if (r.sub) cnt[r.sub] = (cnt[r.sub] || 0) + 1; });
+      var dup = {};
+      S.slots.forEach(function (r, i) {
+        var prot = r.sub && r.free.some(function (f) { return f.t === r.sub && f.prot; });
+        r.extreme = !!r.sub && (prot || cnt[r.sub] > 1);
+        var k = r.sub + '|' + r.p; var bad = r.sub && dup[k]; if (r.sub) dup[k] = 1;
+        var x = $res.querySelector('[data-x="' + i + '"]');
+        if (x) x.innerHTML = bad ? '<b style="color:#c0392b">✖ مكرر في نفس الحصة</b>' : (r.extreme ? '<b style="color:#c0392b">⚠ حالة قصوى</b>' : '');
+      });
+    }
+    function plan() {
+      var absent = Object.keys(S.absent);
+      if (!absent.length) return toast('حدّد معلماً غائباً واحداً على الأقل');
+      $res.innerHTML = '<div class="card">جارٍ التوزيع…</div>';
+      api('subPlan', { date: S.date, absent: absent }).then(function (j) {
+        S.slots = j.slots;
+        if (!S.slots.length) { $res.innerHTML = '<div class="card">لا توجد حصص للمعلمين المحددين في هذا اليوم.</div>'; return; }
+        var un = S.slots.filter(function (r) { return !r.sub; }).length;
+        $res.innerHTML = '<div class="card"><h3>المقترح (' + S.slots.length + ' حصة' + (un ? ' · ' + un + ' دون معلم فارغ' : '') + ')</h3>' +
+          '<p class="muted">يمكنك تغيير المعلم المنتظر من القائمة (الرقم بين القوسين = نصابه ذلك اليوم).</p>' + table(S.slots, true) +
+          '<div class="vtools"><button class="btn" id="ssave">✅ اعتماد وحفظ</button></div></div>';
+        Array.prototype.forEach.call($res.querySelectorAll('select[data-i]'), function (s) {
+          s.onchange = function () { S.slots[+s.getAttribute('data-i')].sub = s.value; recount(); };
+        });
+        recount();
+        document.getElementById('ssave').onclick = save;
+      }).catch(function (e) { if (e.auth) return logout(true); $res.innerHTML = '<div class="card">' + esc(e.message) + '</div>'; });
+    }
+    function save() {
+      var b = document.getElementById('ssave'); b.disabled = true; b.textContent = 'جارٍ الحفظ…';
+      var rows = S.slots.map(function (r) { return { p: r.p, c: r.c, s: r.s, t: r.t, sub: r.sub, extreme: r.extreme }; });
+      api('subSave', { date: S.date, rows: rows }).then(function (j) {
+        S.saved = j.saved; renderSaved(); toast('تم اعتماد حصص الانتظار');
+        if (j.emails && j.emails.length) {
+          var body = 'السلام عليكم،\nحصص الانتظار ليوم ' + S.date + ':\n' + rows.filter(function (r) { return r.sub; }).map(function (r) {
+            return '• أ. ' + r.sub + ' — الحصة ' + r.p + ' — فصل ' + r.c + ' (' + r.s + ') بدلاً من أ. ' + r.t; }).join('\n') + '\n\nوكالة شؤون المعلمين';
+          var url = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(j.emails.join(',')) + '&su=' + encodeURIComponent('حصص الانتظار ' + S.date) + '&body=' + encodeURIComponent(body);
+          document.querySelector('#sres .vtools').insertAdjacentHTML('beforeend', ' <a class="btn small ghost" target="_blank" rel="noopener" href="' + url + '">✉️ إبلاغ المعلمين بالبريد</a>');
+        }
+      }).catch(function (e) { if (e.auth) return logout(true); toast(e.message, 5000); b.disabled = false; b.textContent = '✅ اعتماد وحفظ'; });
+    }
+    document.getElementById('sd').onchange = function () { S.date = this.value || todayISO(); load(); };
+    document.getElementById('sgo').onclick = plan;
+    load();
+  }
+  function loadMySubs() {
+    var box = document.getElementById('mysubs'); if (!box || !state.token) return;
+    api('subMine').then(function (j) {
+      if (!j.list || !j.list.length) return;
+      box.innerHTML = '<div class="card" style="border-right:4px solid #1A9BD7"><b>🔄 حصص الانتظار المسندة لك اليوم</b><ul style="margin:.4em 0 0">' +
+        j.list.map(function (r) { return '<li>الحصة ' + r.p + ' — فصل ' + esc(r.c) + ' (' + esc(r.s) + ') بدلاً من أ. ' + esc(r.t) + '</li>'; }).join('') + '</ul></div>';
+    }).catch(function () {});
+  }
+
   // ---------- الرئيسية ----------
   function viewHome() {
     var u = state.user || {}, m = state.menu || { forms: [], views: [] };
     var html = '<div class="card userline"><div><b>' + esc(u.name || u.email) + '</b><div class="muted" dir="ltr" style="text-align:right">' + esc(u.email) + '</div></div>' +
       '<div><span class="role">' + esc(u.roleLabel || '') + '</span> <button id="out" class="btn small ghost">خروج</button></div></div>';
-    html += '<div id="alerts"></div><div id="kpis"></div>';
+    html += '<div id="alerts"></div><div id="mysubs"></div><div id="kpis"></div>';
+    if (m.subs || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/subs">🔄 حصص الانتظار<small>توزيع آلي حسب جدول المعلمين ونصاب اليوم</small></a></div>';
     if (m.reports || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/report">📊 تقارير الأداء (أسبوعي / شهري)<small>قياس المدرسة في الأسبوع والشهر ومقارنتها بالفترة السابقة</small></a></div>';
     if (m.forms.length) {
       html += '<h2>الإدخال</h2><div class="grid">' + m.forms.map(function (f) {
@@ -279,6 +381,7 @@
     document.getElementById('out').onclick = function () { if (confirm('تسجيل الخروج من هذا الجهاز؟')) logout(); };
     var cached = get('home', null); if (cached) renderKpis(cached);
     refreshHome();
+    loadMySubs();
   }
   var homeSeq = 0;
   var SEEN = { abs_daily: 1 }; // خانات يختفي إشعارها بمجرد فتحها
@@ -983,7 +1086,7 @@
   // ---------- التوجيه ----------
   function route() {
     renderNetbar();
-    document.body.classList.toggle('wide', /^#\/(view|report)\b/.test(location.hash || ''));
+    document.body.classList.toggle('wide', /^#\/(view|report|subs)\b/.test(location.hash || ''));
     var hash = location.hash || '#/home';
     if (!state.token) { return viewLogin('email'); }
     var m = hash.match(/^#\/(\w+)(?:\/([\w-]+))?/) || [];
@@ -994,6 +1097,7 @@
     if (m[1] === 'view' && m[2]) return viewSheet(m[2]);
     if (m[1] === 'outbox') return viewOutbox();
     if (m[1] === 'report') return viewReport();
+    if (m[1] === 'subs') return viewSubs();
     return viewHome();
   }
   window.addEventListener('hashchange', function () { if (!state.sending) route(); });
