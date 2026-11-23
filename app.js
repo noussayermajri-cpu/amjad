@@ -296,7 +296,7 @@
             cell = '<select data-i="' + i + '"><option value="">— لم يُسند —</option>' + r.free.map(function (f) {
               return '<option value="' + esc(f.t) + '"' + (f.t === r.sub ? ' selected' : '') + '>' + esc(f.t) + ' (' + f.load + ')' + (f.prot ? ' · مستثنى' : '') + '</option>';
             }).join('') + '</select> <span class="xb" data-x="' + i + '"></span>';
-          } else cell = esc(r.sub) + (r.extreme ? ' <b style="color:#c0392b">⚠ حالة قصوى</b>' : '');
+          } else cell = esc(r.sub) + (r.extreme ? ' <b style="color:#e00000;font-size:1.3em;font-weight:900;white-space:nowrap">⚠ حالة قصوى</b>' : '');
           return '<tr><td>' + r.p + '</td><td>' + esc(r.c) + '</td><td>' + esc(r.s) + '</td><td>' + esc(r.t) + '</td><td>' + cell + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     }
@@ -309,7 +309,7 @@
         r.extreme = !!r.sub && (prot || cnt[r.sub] > 1);
         var k = r.sub + '|' + r.p; var bad = r.sub && dup[k]; if (r.sub) dup[k] = 1;
         var x = $res.querySelector('[data-x="' + i + '"]');
-        if (x) x.innerHTML = bad ? '<b style="color:#c0392b">✖ مكرر في نفس الحصة</b>' : (r.extreme ? '<b style="color:#c0392b">⚠ حالة قصوى</b>' : '');
+        if (x) x.innerHTML = bad ? '<b style="color:#e00000;font-size:1.3em;font-weight:900;white-space:nowrap">✖ مكرر في نفس الحصة</b>' : (r.extreme ? '<b style="color:#e00000;font-size:1.3em;font-weight:900;white-space:nowrap">⚠ حالة قصوى</b>' : '');
       });
     }
     function plan() {
