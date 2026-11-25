@@ -481,7 +481,8 @@
     if (F.page > 0 && page.help) html += '<p class="help">' + esc(page.help) + '</p>';
     var abs = isAbsPage(page), noAbs = abs && F.answers['__noabs_' + F.page] === true;
     if (abs) html += '<button type="button" id="noAbs" class="btn ' + (noAbs ? 'green' : 'ghost') + '" style="width:100%;margin:4px 0 12px">' + (noAbs ? '✓ لا يوجد غياب — جميع الطلاب حاضرون' : 'لا يوجد غياب (جميع الطلاب حاضرون)') + '</button>';
-    page.items.forEach(function (it) { if (noAbs && it.type === 'checkbox') return; html += renderItem(it); });
+    if (abs && !noAbs) { html += absMatrix(page); page.items.forEach(function (it) { if (it.type !== 'checkbox') html += renderItem(it); }); }
+    else page.items.forEach(function (it) { if (noAbs && it.type === 'checkbox') return; html += renderItem(it); });
     html += '</div>';
     if (errMsg) html += '<div class="err">' + esc(errMsg) + '</div>';
     var nt = nextTarget();
@@ -489,6 +490,7 @@
       '<button class="btn ' + (nt < 0 ? 'green' : '') + '" id="next">' + (nt < 0 ? 'إرسال ✓' : 'التالي ←') + '</button></div>';
     h(html);
     bindItems(page);
+    if (abs && !noAbs) bindAbsMatrix(page);
     document.getElementById('home').onclick = function () { location.hash = '#/home'; };
     var prev = document.getElementById('prev');
     if (prev) prev.onclick = function () { F.page = F.history.pop(); saveDraft(); renderPage(); };
@@ -501,6 +503,71 @@
     };
   }
 
+  // نموذج الغياب: اسم الطالب وأمامه أزرار الحالة (غاب حصة / غاب يوم كامل / متأخر / مستأذن)
+  // يكتب في قوائم النموذج نفسها، فلا يتغيّر شيء في نموذج Google أو في الملفات
+  var ABS_COLS = [[/الغائبون عن الحصة/, 'غاب حصة', 'p'], [/اليوم/, 'غاب يوم كامل', 'd'], [/المتأخر/, 'متأخر', 'l'], [/المستأذن/, 'مستأذن', 'e']];
+  function absCols(page) {
+    var cbs = page.items.filter(function (it) { return it.type === 'checkbox'; }), cols = [];
+    var used = function (x) { return cols.some(function (y) { return y.it === x; }); };
+    ABS_COLS.forEach(function (c) { var it = cbs.filter(function (x) { return c[0].test(x.title) && !used(x); })[0]; if (it) cols.push({ it: it, t: c[1], k: c[2] }); });
+    cbs.forEach(function (x) { if (!used(x)) cols.push({ it: x, t: x.title.replace(/\s*\([^)]*\)\s*$/, ''), k: 'o' }); });
+    return cols;
+  }
+  function absNames(cols) { var n = []; cols.forEach(function (c) { c.it.choices.forEach(function (ch) { if (n.indexOf(ch.v) < 0) n.push(ch.v); }); }); return n; }
+  function absState(cols, name) { for (var i = 0; i < cols.length; i++) { var a = F.answers[cols[i].it.id]; if (Array.isArray(a) && a.indexOf(name) >= 0) return i; } return -1; }
+  function absCss() {
+    if (document.getElementById('absCss')) return;
+    var st = document.createElement('style'); st.id = 'absCss';
+    st.textContent = '.abssum{background:var(--blue-l);color:var(--blue-d);border-radius:10px;padding:8px 12px;margin:6px 0 10px;font-weight:700;font-size:15px}' +
+      '.absm{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}' +
+      '.absrow{padding:10px 10px 12px;border-bottom:1px solid #eef2f4}.absrow:last-child{border-bottom:0}.absrow.has{background:#fbfcf7}' +
+      '.absname{font-weight:700;margin-bottom:8px;font-size:16px}' +
+      '.absbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}' +
+      '.absb{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:10px 2px;font:inherit;font-size:14px;font-weight:700;color:var(--muted);cursor:pointer;line-height:1.25}' +
+      '.absb.kp.on{background:#e67e22;border-color:#e67e22;color:#fff}.absb.kd.on{background:var(--err);border-color:var(--err);color:#fff}' +
+      '.absb.kl.on{background:#d4a017;border-color:#d4a017;color:#fff}.absb.ke.on{background:var(--blue);border-color:var(--blue);color:#fff}.absb.ko.on{background:var(--green);border-color:var(--green);color:#fff}' +
+      '@media (max-width:360px){.absb{font-size:12.5px}}';
+    document.head.appendChild(st);
+  }
+  function absMatrix(page) {
+    absCss();
+    var cols = absCols(page), names = absNames(cols);
+    var html = '<div class="item"><label class="q">اضغط الحالة المناسبة أمام اسم الطالب. من لا تضغط له شيئاً يُعدّ حاضراً، والضغط مرة ثانية يلغي الاختيار.</label>';
+    if (names.length > 12) html += '<input type="search" id="absFilter" placeholder="🔎 ابحث بالاسم…" value="' + esc(F.filters.__abs || '') + '" style="margin:6px 0">';
+    html += '<div class="abssum" id="absSum"></div><div class="absm">';
+    names.forEach(function (n, ri) {
+      var s = absState(cols, n);
+      html += '<div class="absrow' + (s >= 0 ? ' has' : '') + '" data-r="' + ri + '"><div class="absname">' + (ri + 1) + '. ' + esc(n) + '</div><div class="absbtns">' + cols.map(function (c, ci) {
+        return '<button type="button" class="absb k' + c.k + (s === ci ? ' on' : '') + '" data-r="' + ri + '" data-c="' + ci + '">' + esc(c.t) + '</button>';
+      }).join('') + '</div></div>';
+    });
+    return html + '</div></div>';
+  }
+  function bindAbsMatrix(page) {
+    var cols = absCols(page), names = absNames(cols);
+    var sum = function () {
+      var el = document.getElementById('absSum'); if (!el) return;
+      var parts = cols.map(function (c) { var a = F.answers[c.it.id], k = Array.isArray(a) ? a.length : 0; return k ? c.t + ': ' + k : ''; }).filter(Boolean);
+      el.textContent = parts.length ? parts.join('  •  ') : 'لم تحدّد أحداً بعد (الجميع حاضرون)';
+    };
+    sum();
+    $app.querySelectorAll('.absb').forEach(function (b) {
+      b.onclick = function () {
+        var ri = +b.dataset.r, ci = +b.dataset.c, n = names[ri], was = absState(cols, n), on = was !== ci;
+        cols.forEach(function (c) { var a = F.answers[c.it.id]; if (Array.isArray(a)) { a = a.filter(function (x) { return x !== n; }); if (a.length) F.answers[c.it.id] = a; else delete F.answers[c.it.id]; } });
+        if (on) F.answers[cols[ci].it.id] = (F.answers[cols[ci].it.id] || []).concat([n]);
+        var row = b.parentNode.parentNode;
+        row.querySelectorAll('.absb').forEach(function (x) { x.classList.toggle('on', on && +x.dataset.c === ci); });
+        row.classList.toggle('has', on);
+        saveDraft(); sum();
+      };
+    });
+    var f = document.getElementById('absFilter');
+    if (f) {
+      var ap = function () { var q = f.value.trim(); F.filters.__abs = q; $app.querySelectorAll('.absrow').forEach(function (r) { r.style.display = !q || names[+r.dataset.r].indexOf(q) >= 0 ? '' : 'none'; }); };
+      f.addEventListener('input', ap); ap();
+    }
+  }
   // صفحة صف في نموذج الغياب: فيها قوائم طلاب (اختيار متعدد)
   function isAbsPage(page) {
     return F.key === 'absence' && F.page > 0 && page.items.some(function (it) { return it.type === 'checkbox'; });
