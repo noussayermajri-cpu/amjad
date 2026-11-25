@@ -363,6 +363,7 @@
       '<div><span class="role">' + esc(u.roleLabel || '') + '</span> <button id="out" class="btn small ghost">خروج</button></div></div>';
     html += '<div id="alerts"></div><div id="mysubs"></div><div id="kpis"></div>';
     if (m.subs || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/subs">🔄 حصص الانتظار<small>توزيع آلي حسب جدول المعلمين ونصاب اليوم</small></a></div>';
+    if (m.visits || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/visits">🗓️ الزيارات الصفية وتقييم الأداء<small>أجندة الزيارات الشهرية، تقييم المعلم أثناء الحصة، وتقرير يُرسل له بالبريد وواتساب</small></a></div>';
     if (m.reports || /admin|director|supervisor/.test((u.roles || []).join(','))) html += '<div class="grid"><a class="tile report" href="#/report">📊 تقارير الأداء (أسبوعي / شهري)<small>قياس المدرسة في الأسبوع والشهر ومقارنتها بالفترة السابقة</small></a></div>';
     if (m.forms.length) {
       html += '<h2>الإدخال</h2><div class="grid">' + m.forms.map(function (f) {
@@ -1303,6 +1304,238 @@
     load();
   }
 
+  // ---------- الزيارات الصفية وتقييم أداء المعلمين ----------
+  var VS = { month: '', data: null };
+  function visCss() {
+    if (document.getElementById('visCss')) return;
+    var st = document.createElement('style'); st.id = 'visCss';
+    st.textContent = '.vday{margin:14px 0 6px;font-weight:800;color:var(--blue-d)}.vday.today{color:var(--green-d)}' +
+      '.vcard{background:#fff;border:1px solid var(--line);border-right:5px solid var(--blue);border-radius:12px;padding:10px 12px;margin:6px 0}' +
+      '.vcard.done{border-right-color:var(--green)}.vcard.draft{border-right-color:#e6a817}' +
+      '.vrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.vt{font-weight:800}.vm{color:var(--muted);font-size:14px}' +
+      '.vbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}' +
+      '.vtabs{display:flex;gap:6px;margin:10px 0}.vtabs .btn{flex:1}' +
+      '.vdom{margin:16px 0 6px;padding:6px 10px;background:var(--green-l);border-radius:8px;font-weight:800;color:#3d6b22;display:flex;justify-content:space-between}' +
+      '.vitem{padding:8px 2px 10px;border-bottom:1px solid #eef2f4}.vitem .q{font-weight:700;margin-bottom:6px;font-size:15.5px}' +
+      '.vsc{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}' +
+      '.vsc button{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:8px 0 6px;font:inherit;font-weight:800;font-size:16px;color:var(--ink);cursor:pointer;line-height:1.1}' +
+      '.vsc button small{display:block;font-size:10.5px;font-weight:600;color:var(--muted)}' +
+      '.vsc button.on{color:#fff}.vsc button.on small{color:#fff}.vsc .s5.on{background:#2e8b57;border-color:#2e8b57}.vsc .s4.on{background:#8DB56B;border-color:#8DB56B}' +
+      '.vsc .s3.on{background:#1A9BD7;border-color:#1A9BD7}.vsc .s2.on{background:#e67e22;border-color:#e67e22}.vsc .s1.on{background:#c0392b;border-color:#c0392b}.vsc .s0.on{background:#7f8c8d;border-color:#7f8c8d}' +
+      '.vscore{position:sticky;top:84px;z-index:3;background:var(--blue);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;text-align:center;margin:8px 0;box-shadow:0 2px 6px rgba(0,0,0,.12)}' +
+      '.vsum td,.vsum th{padding:7px 6px;border-bottom:1px solid #eef2f4;text-align:right;font-size:15px}.vsum{width:100%;border-collapse:collapse}' +
+      '.vbox{background:#fff;border:1.5px dashed var(--blue);border-radius:12px;padding:12px;margin:8px 0}';
+    document.head.appendChild(st);
+  }
+  function visPct(scores) {
+    var s = 0, n = 0; Object.keys(scores || {}).forEach(function (k) { var v = +scores[k]; if (v >= 1 && v <= 5) { s += v; n++; } });
+    var p = n ? Math.round(s * 1000 / (n * 5)) / 10 : '';
+    return { pct: p, n: n, grade: p === '' ? '' : p >= 90 ? 'A – ممتاز' : p >= 80 ? 'B – جيد جداً' : p >= 70 ? 'C – جيد' : p >= 60 ? 'D – مقبول' : 'يحتاج خطة تطوير' };
+  }
+  function visChip(v) {
+    var k = /أُرسلت/.test(v.st) ? 'ok' : /معتمدة/.test(v.st) ? 'ok' : /مسودة/.test(v.st) ? 'warn' : '';
+    return '<span class="chip ' + k + '">' + esc(v.st || 'مجدولة') + (v.pct !== '' && v.pct != null && v.st !== 'مجدولة' ? ' · ' + v.pct + '%' : '') + '</span>';
+  }
+  function viewVisits(id) {
+    visCss();
+    if (id) return viewVisitEval(id);
+    var month = VS.month || todayISO().slice(0, 7), tab = 'agenda';
+    h('<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button><h1>🗓️ الزيارات الصفية وتقييم الأداء</h1>' +
+      '<div class="card"><label class="q">الشهر</label><input type="month" id="vm" value="' + month + '">' +
+      '<div class="vbtns"><button class="btn" id="vplan">⚙️ إنشاء أجندة الشهر</button><button class="btn ghost" id="vadd">➕ زيارة جديدة</button></div>' +
+      '<p class="help" style="margin:8px 0 0">الأجندة تضع زيارة واحدة لكل معلم في الشهر، موزعة على أيام الدراسة المتبقية وفي حصصه الفعلية من الجدول، مع تغيير الفصل عن الزيارة السابقة.</p></div>' +
+      '<div id="vform"></div><div id="vkpi"></div><div class="vtabs"><button class="btn small" id="t1">الأجندة</button><button class="btn small ghost" id="t2">ملخص المعلمين</button></div><div id="vlist"><div class="loading">جارٍ التحميل…</div></div>');
+    var $l = document.getElementById('vlist');
+    function load() {
+      $l.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
+      api('visList', { month: month }).then(function (j) { VS.month = month; VS.data = j; draw(); })
+        .catch(function (e) { if (e.auth) return logout(true); $l.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; });
+    }
+    function draw() {
+      var j = VS.data, c = { 'مجدولة': 0, 'مسودة': 0, 'معتمدة': 0, 'أُرسلت': 0 };
+      j.visits.forEach(function (v) { c[v.st] = (c[v.st] || 0) + 1; });
+      document.getElementById('vkpi').innerHTML = '<div class="kpis">' + Object.keys(c).map(function (k) { return '<div class="kpi"><b>' + c[k] + '</b><span>' + k + '</span></div>'; }).join('') + '</div>';
+      document.getElementById('t1').className = 'btn small' + (tab === 'agenda' ? '' : ' ghost');
+      document.getElementById('t2').className = 'btn small' + (tab === 'sum' ? '' : ' ghost');
+      if (tab === 'sum') {
+        $l.innerHTML = '<div class="card"><table class="vsum"><tr><th>المعلم</th><th>زيارات معتمدة</th><th>آخر نسبة</th><th>المتوسط</th></tr>' +
+          j.summary.sort(function (a, b) { return (a.avg === '' ? 999 : a.avg) - (b.avg === '' ? 999 : b.avg); }).map(function (s) {
+            return '<tr><td>' + esc(s.t) + '</td><td>' + s.n + '</td><td>' + (s.last === '' ? '—' : s.last + '%') + '</td><td>' + (s.avg === '' ? '—' : '<b>' + s.avg + '%</b>') + '</td></tr>';
+          }).join('') + '</table><p class="help">مرتب من الأقل متوسطاً، ليبدأ الدعم بمن يحتاجه أكثر.</p></div>';
+        return;
+      }
+      if (!j.visits.length) { $l.innerHTML = '<div class="warnbox">لا توجد زيارات في هذا الشهر. اضغط «إنشاء أجندة الشهر».</div>'; return; }
+      var html = '', last = '', td = todayISO().replace(/-/g, '/');
+      j.visits.forEach(function (v) {
+        if (v.date !== last) { last = v.date; html += '<div class="vday' + (v.date === td ? ' today' : '') + '">' + esc(v.day + ' ' + v.date) + (v.date === td ? ' — اليوم' : '') + '</div>'; }
+        var fin = /معتمدة|أُرسلت/.test(v.st);
+        html += '<div class="vcard ' + (fin ? 'done' : v.st === 'مسودة' ? 'draft' : '') + '"><div class="vrow"><div><div class="vt">الحصة ' + v.p + ' · ' + esc(v.c) + ' · أ. ' + esc(v.t) + '</div>' +
+          '<div class="vm">' + esc(v.s) + (v.by ? ' · الزائر: ' + esc(v.by) : '') + '</div></div>' + visChip(v) + '</div><div class="vbtns">' +
+          '<a class="btn small' + (fin ? ' ghost' : '') + '" href="#/visits/' + esc(v.id) + '">' + (fin ? '📄 التقرير' : v.st === 'مسودة' ? '📝 إكمال التقييم' : '📝 بدء التقييم') + '</a>' +
+          (fin ? '' : '<button class="btn small ghost" data-mv="' + esc(v.id) + '">↔ نقل</button><button class="btn small ghost" data-del="' + esc(v.id) + '">🗑 حذف</button>') + '</div></div>';
+      });
+      $l.innerHTML = html;
+      $l.querySelectorAll('[data-mv]').forEach(function (b) { b.onclick = function () { var v = j.visits.filter(function (x) { return x.id === b.dataset.mv; })[0]; slotForm(v); }; });
+      $l.querySelectorAll('[data-del]').forEach(function (b) {
+        b.onclick = function () {
+          var v = j.visits.filter(function (x) { return x.id === b.dataset.del; })[0];
+          if (!confirm('حذف زيارة أ. ' + v.t + ' يوم ' + v.date + '؟')) return;
+          api('visDel', { id: v.id }).then(function () { toast('تم الحذف'); load(); }).catch(function (e) { toast(e.message); });
+        };
+      });
+    }
+    // نموذج إضافة زيارة أو نقلها: المعلم + التاريخ + حصته في ذلك اليوم
+    function slotForm(v) {
+      var $f = document.getElementById('vform'), teachers = (VS.data && VS.data.summary || []).map(function (s) { return s.t; }).sort(function (a, b) { return a.localeCompare(b); });
+      var d0 = v ? v.date.replace(/\//g, '-') : todayISO();
+      $f.innerHTML = '<div class="vbox"><b>' + (v ? '↔ نقل زيارة أ. ' + esc(v.t) : '➕ زيارة جديدة') + '</b>' +
+        (v ? '' : '<label class="q">المعلم</label><select id="ft"><option value="">— اختر —</option>' + teachers.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('') + '</select>') +
+        '<label class="q">التاريخ</label><input type="date" id="fd" value="' + d0 + '"><label class="q">الحصة</label><select id="fp"><option value="">— اختر المعلم والتاريخ —</option></select>' +
+        '<div class="vbtns"><button class="btn green" id="fok">حفظ</button><button class="btn ghost" id="fx">إلغاء</button></div></div>';
+      window.scrollTo(0, 0);
+      var who = function () { return v ? v.t : document.getElementById('ft').value; };
+      var slots = function () {
+        var t = who(), d = document.getElementById('fd').value, $p = document.getElementById('fp');
+        if (!t || !d) return;
+        $p.innerHTML = '<option value="">جارٍ التحميل…</option>';
+        api('visSlots', { t: t, date: d, id: v ? v.id : '' }).then(function (j) {
+          if (j.holiday) { $p.innerHTML = '<option value="">' + esc(j.day) + ' إجازة</option>'; return; }
+          $p.innerHTML = j.lessons.length ? '<option value="">— اختر —</option>' + j.lessons.map(function (l) {
+            return '<option value="' + l.p + '"' + (v && v.p === l.p && v.date.replace(/\//g, '-') === d ? ' selected' : '') + '>الحصة ' + l.p + ' – ' + esc(l.c) + ' – ' + esc(l.s) + (l.busy ? ' (فيها زيارة لـ ' + esc(l.busy) + ')' : '') + '</option>';
+          }).join('') : '<option value="">لا حصص له يوم ' + esc(j.day) + '</option>';
+        }).catch(function (e) { $p.innerHTML = '<option value="">' + esc(e.message) + '</option>'; });
+      };
+      if (!v) document.getElementById('ft').onchange = slots;
+      document.getElementById('fd').onchange = slots; slots();
+      document.getElementById('fx').onclick = function () { $f.innerHTML = ''; };
+      document.getElementById('fok').onclick = function () {
+        var t = who(), d = document.getElementById('fd').value, p = document.getElementById('fp').value;
+        if (!t || !d || !p) return toast('اختر المعلم والتاريخ والحصة');
+        this.disabled = true;
+        api(v ? 'visMove' : 'visAdd', v ? { id: v.id, date: d, p: p } : { t: t, date: d, p: p }).then(function () {
+          $f.innerHTML = ''; toast('تم الحفظ ✓'); var mo = d.slice(0, 7); if (mo !== month) { month = mo; document.getElementById('vm').value = mo; } load();
+        }).catch(function (e) { toast(e.message); document.getElementById('fok').disabled = false; });
+      };
+    }
+    document.getElementById('vm').onchange = function () { month = this.value || month; load(); };
+    document.getElementById('t1').onclick = function () { tab = 'agenda'; if (VS.data) draw(); };
+    document.getElementById('t2').onclick = function () { tab = 'sum'; if (VS.data) draw(); };
+    document.getElementById('vadd').onclick = function () { slotForm(null); };
+    document.getElementById('vplan').onclick = function () {
+      var b = this; b.disabled = true; b.textContent = 'جارٍ إنشاء الأجندة…';
+      api('visPlan', { month: month }, 60000).then(function (j) {
+        toast(j.msg || ('أُضيفت ' + j.added + ' زيارة' + (j.missed && j.missed.length ? ' — تعذّر جدولة: ' + j.missed.join('، ') : '')), 5000);
+        b.disabled = false; b.textContent = '⚙️ إنشاء أجندة الشهر'; load();
+      }).catch(function (e) { toast(e.message, 5000); b.disabled = false; b.textContent = '⚙️ إنشاء أجندة الشهر'; });
+    };
+    load();
+  }
+
+  function viewVisitEval(id) {
+    h('<button class="back" onclick="location.hash=\'#/visits\'">→ الأجندة</button><div class="loading">جارٍ التحميل…</div>');
+    var go = function (j) {
+      var v = j.visits.filter(function (x) { return x.id === id; })[0];
+      if (!v) { h('<button class="back" onclick="location.hash=\'#/visits\'">→ الأجندة</button><div class="err">الزيارة غير موجودة في هذا الشهر.</div>'); return; }
+      renderEval(v, j);
+    };
+    if (VS.data && VS.data.visits.some(function (x) { return x.id === id; })) return go(VS.data);
+    api('visList', { month: VS.month || todayISO().slice(0, 7) }).then(function (j) { VS.data = j; VS.month = j.month; go(j); })
+      .catch(function (e) { if (e.auth) return logout(true); h('<div class="err">' + esc(e.message) + '</div>'); });
+  }
+
+  function renderEval(v, j) {
+    var key = 'vis_' + v.id, loc = get(key, null);
+    var E = loc && loc.scores ? loc : { scores: v.scores || {}, topic: v.topic || '', str: v.str || '', imp: v.imp || '', rec: v.rec || '' };
+    var fin = /معتمدة|أُرسلت/.test(v.st), sent = /أُرسلت/.test(v.st);
+    var save = function () { E.at = new Date().toISOString(); set(key, E); };
+    var html = '<button class="back" onclick="location.hash=\'#/visits\'">→ الأجندة</button><h1>📝 تقييم زيارة صفية</h1>' +
+      '<div class="card"><div class="vt">أ. ' + esc(v.t) + ' — ' + esc(v.s) + '</div><div class="vm">' + esc(v.day + ' ' + v.date) + ' · الحصة ' + v.p + ' · ' + esc(v.c) + '</div>' +
+      (v.mailed ? '<div class="vm">📧 أُرسل: ' + esc(v.mailed) + '</div>' : '') +
+      '<label class="q">موضوع الدرس</label><input type="text" id="etopic" value="' + esc(E.topic) + '" placeholder="عنوان الدرس الذي حضرته"></div>' +
+      '<div class="vscore" id="escore"></div>' +
+      (fin ? '<div class="card" id="erep"><b>📄 التقرير جاهز</b><div class="vbtns"><a class="btn small" target="_blank" rel="noopener" href="' + esc(v.pdf) + '">فتح التقرير PDF</a>' +
+        '<button class="btn small" id="email">📧 إرسال بالبريد للمعلم</button><a class="btn small wa" id="ewa" target="_blank" rel="noopener" href="#">📲 واتساب</a></div>' +
+        '<p class="help" style="margin:6px 0 0">يمكنك تعديل التقييم وإعادة الاعتماد لإنشاء تقرير محدّث' + (sent ? ' (أُرسل سابقاً للمعلم)' : '') + '.</p></div>' : '');
+    var lab = {}; j.scale.forEach(function (x) { lab[x[0]] = x[1]; });
+    j.crit.forEach(function (g) {
+      html += '<div class="vdom"><span>' + esc(g.d) + '</span><span class="vm">' + esc(g.k) + '</span></div>';
+      g.items.forEach(function (it) {
+        var cur = E.scores[it.id];
+        html += '<div class="vitem"><div class="q">' + esc(it.t) + '</div><div class="vsc" data-it="' + it.id + '">' +
+          [5, 4, 3, 2, 1, 0].map(function (n) {
+            return '<button type="button" class="s' + n + (cur === n ? ' on' : '') + '" data-n="' + n + '">' + (n ? n : '—') + '<small>' + (n ? lab[n] : 'لا ينطبق') + '</small></button>';
+          }).join('') + '</div></div>';
+      });
+    });
+    html += '<div class="card"><button class="btn ghost small" id="esug" style="width:100%">✨ اقتراح الملاحظات والتوصيات من التقييم</button>' +
+      '<label class="q">✔ نقاط القوة</label><textarea id="estr" placeholder="كل ملاحظة في سطر">' + esc(E.str) + '</textarea>' +
+      '<label class="q">● ما لوحظ ويحتاج تحسيناً</label><textarea id="eimp" placeholder="كل ملاحظة في سطر">' + esc(E.imp) + '</textarea>' +
+      '<label class="q">➜ التوصيات وما يجب على المعلم فعله</label><textarea id="erec" placeholder="كل توصية في سطر">' + esc(E.rec) + '</textarea></div>' +
+      '<div class="actions"><button class="btn ghost" id="edraft">💾 حفظ مسودة</button><button class="btn green" id="efin">✅ اعتماد وإنشاء التقرير</button></div>';
+    h(html);
+    var score = function () {
+      var P = visPct(E.scores);
+      document.getElementById('escore').textContent = P.n ? 'النسبة: ' + P.pct + '% — ' + P.grade + ' (' + P.n + ' بنداً)' : 'اختر مستوى كل بند أثناء الحصة';
+    };
+    score();
+    $app.querySelectorAll('.vsc button').forEach(function (b) {
+      b.onclick = function () {
+        var it = b.parentNode.dataset.it, n = +b.dataset.n;
+        if (E.scores[it] === n) delete E.scores[it]; else E.scores[it] = n;
+        b.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', E.scores[it] === +x.dataset.n); });
+        save(); score();
+      };
+    });
+    [['etopic', 'topic'], ['estr', 'str'], ['eimp', 'imp'], ['erec', 'rec']].forEach(function (p) {
+      document.getElementById(p[0]).addEventListener('input', function () { E[p[1]] = this.value; save(); });
+    });
+    document.getElementById('esug').onclick = function () {
+      var all = []; j.crit.forEach(function (g) { g.items.forEach(function (it) { all.push(it); }); });
+      var sc = function (it) { return E.scores[it.id]; };
+      var hi = all.filter(function (it) { return sc(it) === 5; });
+      if (hi.length < 3) hi = hi.concat(all.filter(function (it) { return sc(it) === 4; })).slice(0, 5);
+      var low = all.filter(function (it) { return sc(it) >= 1 && sc(it) <= 2; });
+      var mid = all.filter(function (it) { return sc(it) === 3; });
+      var recs = low.concat(mid).slice(0, 6);
+      if (!hi.length && !recs.length) return toast('قيّم البنود أولاً ثم اضغط الاقتراح');
+      if ((E.str || E.imp || E.rec) && !confirm('سيتم استبدال النصوص الحالية بالاقتراح. متابعة؟')) return;
+      E.str = hi.map(function (it) { return it.s; }).join('\n');
+      E.imp = low.map(function (it) { return it.t + ' (يحتاج تحسيناً)'; }).concat(mid.map(function (it) { return it.t + ' (متمكن ويمكن تطويره)'; })).join('\n');
+      E.rec = recs.map(function (it) { return it.r; }).join('\n');
+      document.getElementById('estr').value = E.str; document.getElementById('eimp').value = E.imp; document.getElementById('erec').value = E.rec;
+      save(); toast('تمت تعبئة الاقتراح، عدّله بما لاحظته في الحصة');
+    };
+    var send = function (final) {
+      var b = document.getElementById(final ? 'efin' : 'edraft'), t = b.textContent;
+      b.disabled = true; b.textContent = final ? 'جارٍ إنشاء التقرير…' : 'جارٍ الحفظ…';
+      api('visSave', { id: v.id, scores: E.scores, topic: E.topic, str: E.str, imp: E.imp, rec: E.rec, final: !!final }, 90000).then(function (r) {
+        del(key);
+        var i = VS.data.visits.map(function (x) { return x.id; }).indexOf(v.id); if (i >= 0) VS.data.visits[i] = r.visit;
+        toast(final ? 'تم اعتماد التقييم وإنشاء التقرير ✓' : 'تم حفظ المسودة ✓');
+        renderEval(r.visit, VS.data);
+      }).catch(function (e) { b.disabled = false; b.textContent = t; if (e.auth) return logout(true); toast(e.message, 5000); });
+    };
+    document.getElementById('edraft').onclick = function () { send(false); };
+    document.getElementById('efin').onclick = function () {
+      if (visPct(E.scores).n < 10) return toast('قيّم 10 بنود على الأقل قبل الاعتماد');
+      if (!String(E.rec || '').trim()) return toast('اكتب التوصيات وما يجب على المعلم فعله');
+      send(true);
+    };
+    if (fin) {
+      var wa = document.getElementById('ewa');
+      api('visWa', { id: v.id }).then(function (r) { wa.href = r.url; }).catch(function () { wa.style.display = 'none'; });
+      document.getElementById('email').onclick = function () {
+        var b = this; if (!confirm('إرسال التقرير إلى بريد أ. ' + v.t + '؟')) return;
+        b.disabled = true; b.textContent = 'جارٍ الإرسال…';
+        api('visMail', { id: v.id }, 60000).then(function (r) {
+          toast('أُرسل التقرير إلى ' + r.to + ' ✓', 4000);
+          var i = VS.data.visits.map(function (x) { return x.id; }).indexOf(v.id); if (i >= 0) VS.data.visits[i] = r.visit;
+          renderEval(r.visit, VS.data);
+        }).catch(function (e) { b.disabled = false; b.textContent = '📧 إرسال بالبريد للمعلم'; toast(e.message, 5000); });
+      };
+    }
+  }
+
   // ---------- التوجيه ----------
   function route() {
     renderNetbar();
@@ -1318,6 +1551,7 @@
     if (m[1] === 'outbox') return viewOutbox();
     if (m[1] === 'report') return viewReport();
     if (m[1] === 'subs') return viewSubs();
+    if (m[1] === 'visits') return viewVisits(m[2]);
     return viewHome();
   }
   window.addEventListener('hashchange', function () { if (!state.sending) route(); });
