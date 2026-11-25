@@ -478,8 +478,8 @@
     var html = '<button class="back" id="home">→ الرئيسية</button><h1>' + esc(def.title) + '</h1>';
     if (F.offline) html += '<div class="warnbox" style="margin-bottom:8px">بدون اتصال — سيُحفظ الإدخال في الجهاز ويُرسل تلقائياً عند عودة الإنترنت.</div>';
     html += '<div class="pagehead">' + esc(F.page === 0 ? 'البيانات الأساسية' : page.title || ('الصفحة ' + (F.page + 1))) + '</div><div class="pagebody">';
-    if (F.page > 0 && page.help) html += '<p class="help">' + esc(page.help) + '</p>';
     var abs = isAbsPage(page), noAbs = abs && F.answers['__noabs_' + F.page] === true;
+    if (F.page > 0 && page.help && !abs) html += '<p class="help">' + esc(page.help) + '</p>';
     if (abs) html += '<button type="button" id="noAbs" class="btn ' + (noAbs ? 'green' : 'ghost') + '" style="width:100%;margin:4px 0 12px">' + (noAbs ? '✓ لا يوجد غياب — جميع الطلاب حاضرون' : 'لا يوجد غياب (جميع الطلاب حاضرون)') + '</button>';
     if (abs && !noAbs) { html += absMatrix(page); page.items.forEach(function (it) { if (it.type !== 'checkbox') html += renderItem(it); }); }
     else page.items.forEach(function (it) { if (noAbs && it.type === 'checkbox') return; html += renderItem(it); });
