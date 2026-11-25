@@ -1324,7 +1324,10 @@
       '.vsc .s3.on{background:#1A9BD7;border-color:#1A9BD7}.vsc .s2.on{background:#e67e22;border-color:#e67e22}.vsc .s1.on{background:#c0392b;border-color:#c0392b}.vsc .s0.on{background:#7f8c8d;border-color:#7f8c8d}' +
       '.vscore{position:sticky;top:84px;z-index:3;background:var(--blue);color:#fff;border-radius:12px;padding:9px 12px;font-weight:800;text-align:center;margin:8px 0;box-shadow:0 2px 6px rgba(0,0,0,.12)}' +
       '.vsum td,.vsum th{padding:7px 6px;border-bottom:1px solid #eef2f4;text-align:right;font-size:15px}.vsum{width:100%;border-collapse:collapse}' +
-      '.vbox{background:#fff;border:1.5px dashed var(--blue);border-radius:12px;padding:12px;margin:8px 0}';
+      '.vbox{background:#fff;border:1.5px dashed var(--blue);border-radius:12px;padding:12px;margin:8px 0}' +
+      '.wsc{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.wsc button{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:9px 2px;font:inherit;font-weight:800;font-size:14px;cursor:pointer;color:var(--ink)}' +
+      '.wsc .k2.on{background:#2e8b57;border-color:#2e8b57;color:#fff}.wsc .k1.on{background:#e6a817;border-color:#e6a817;color:#fff}.wsc .k0.on{background:#c0392b;border-color:#c0392b;color:#fff}' +
+      '.wles{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}.wles .btn{font-size:13px;padding:7px 10px}details.wp{margin:6px 0}details.wp summary{font-weight:800;cursor:pointer;padding:6px 0;color:var(--blue-d)}';
     document.head.appendChild(st);
   }
   function visPct(scores) {
@@ -1343,8 +1346,8 @@
     h('<button class="back" onclick="location.hash=\'#/home\'">→ الرئيسية</button><h1>🗓️ الزيارات الصفية وتقييم الأداء</h1>' +
       '<div class="card"><label class="q">الشهر</label><input type="month" id="vm" value="' + month + '">' +
       '<div class="vbtns"><button class="btn" id="vplan">⚙️ إنشاء أجندة الشهر</button><button class="btn ghost" id="vadd">➕ زيارة جديدة</button></div>' +
-      '<p class="help" style="margin:8px 0 0">الأجندة تضع زيارة واحدة لكل معلم في الشهر، موزعة على أيام الدراسة المتبقية وفي حصصه الفعلية من الجدول، مع تغيير الفصل عن الزيارة السابقة.</p></div>' +
-      '<div id="vform"></div><div id="vkpi"></div><div class="vtabs"><button class="btn small" id="t1">الأجندة</button><button class="btn small ghost" id="t2">ملخص المعلمين</button></div><div id="vlist"><div class="loading">جارٍ التحميل…</div></div>');
+      '<p class="help" style="margin:8px 0 0">الأجندة تضع زيارة رسمية واحدة لكل معلم في الشهر: زيارتان كحد أقصى في اليوم، بدون الحصة الأولى والأخيرة، وبعد أسبوع على الأقل. يُبلَّغ المعلم بالبريد تلقائياً قبل الزيارة بأسبوع.</p></div>' +
+      '<div id="vform"></div><div id="vkpi"></div><div class="vtabs"><button class="btn small" id="t1">الأجندة</button><button class="btn small ghost" id="t2">ملخص المعلمين</button><button class="btn small ghost" id="t3">🚶 الجولة اليومية</button></div><div id="vlist"><div class="loading">جارٍ التحميل…</div></div>');
     var $l = document.getElementById('vlist');
     function load() {
       $l.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
@@ -1357,6 +1360,8 @@
       document.getElementById('vkpi').innerHTML = '<div class="kpis">' + Object.keys(c).map(function (k) { return '<div class="kpi"><b>' + c[k] + '</b><span>' + k + '</span></div>'; }).join('') + '</div>';
       document.getElementById('t1').className = 'btn small' + (tab === 'agenda' ? '' : ' ghost');
       document.getElementById('t2').className = 'btn small' + (tab === 'sum' ? '' : ' ghost');
+      document.getElementById('t3').className = 'btn small' + (tab === 'walk' ? '' : ' ghost');
+      if (tab === 'walk') return walkView();
       if (tab === 'sum') {
         $l.innerHTML = '<div class="card"><table class="vsum"><tr><th>المعلم</th><th>زيارات معتمدة</th><th>آخر نسبة</th><th>المتوسط</th></tr>' +
           j.summary.sort(function (a, b) { return (a.avg === '' ? 999 : a.avg) - (b.avg === '' ? 999 : b.avg); }).map(function (s) {
@@ -1370,7 +1375,8 @@
         if (v.date !== last) { last = v.date; html += '<div class="vday' + (v.date === td ? ' today' : '') + '">' + esc(v.day + ' ' + v.date) + (v.date === td ? ' — اليوم' : '') + '</div>'; }
         var fin = /معتمدة|أُرسلت/.test(v.st);
         html += '<div class="vcard ' + (fin ? 'done' : v.st === 'مسودة' ? 'draft' : '') + '"><div class="vrow"><div><div class="vt">الحصة ' + v.p + ' · ' + esc(v.c) + ' · أ. ' + esc(v.t) + '</div>' +
-          '<div class="vm">' + esc(v.s) + (v.by ? ' · الزائر: ' + esc(v.by) : '') + '</div></div>' + visChip(v) + '</div><div class="vbtns">' +
+          '<div class="vm">' + esc(v.s) + (v.by ? ' · الزائر: ' + esc(v.by) : '') + '</div>' +
+          (v.notified ? '<div class="vm">📧 أُبلغ المعلم: ' + esc(String(v.notified).split(' → ')[0]) + '</div>' : (v.st === 'مجدولة' ? '<div class="vm">⏳ يُبلَّغ المعلم بالبريد قبل الزيارة بأسبوع</div>' : '')) + '</div>' + visChip(v) + '</div><div class="vbtns">' +
           '<a class="btn small' + (fin ? ' ghost' : '') + '" href="#/visits/' + esc(v.id) + '">' + (fin ? '📄 التقرير' : v.st === 'مسودة' ? '📝 إكمال التقييم' : '📝 بدء التقييم') + '</a>' +
           (fin ? '' : '<button class="btn small ghost" data-mv="' + esc(v.id) + '">↔ نقل</button><button class="btn small ghost" data-del="' + esc(v.id) + '">🗑 حذف</button>') + '</div></div>';
       });
@@ -1387,10 +1393,10 @@
     // نموذج إضافة زيارة أو نقلها: المعلم + التاريخ + حصته في ذلك اليوم
     function slotForm(v) {
       var $f = document.getElementById('vform'), teachers = (VS.data && VS.data.summary || []).map(function (s) { return s.t; }).sort(function (a, b) { return a.localeCompare(b); });
-      var d0 = v ? v.date.replace(/\//g, '-') : todayISO();
+      var minD = (VS.data && VS.data.minDate) || todayISO(), d0 = v ? v.date.replace(/\//g, '-') : minD;
       $f.innerHTML = '<div class="vbox"><b>' + (v ? '↔ نقل زيارة أ. ' + esc(v.t) : '➕ زيارة جديدة') + '</b>' +
         (v ? '' : '<label class="q">المعلم</label><select id="ft"><option value="">— اختر —</option>' + teachers.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join('') + '</select>') +
-        '<label class="q">التاريخ</label><input type="date" id="fd" value="' + d0 + '"><label class="q">الحصة</label><select id="fp"><option value="">— اختر المعلم والتاريخ —</option></select>' +
+        '<label class="q">التاريخ <small class="vm">(أقرب موعد ' + esc(minD) + ' لإبلاغ المعلم قبل أسبوع)</small></label><input type="date" id="fd" min="' + minD + '" value="' + d0 + '"><label class="q">الحصة</label><select id="fp"><option value="">— اختر المعلم والتاريخ —</option></select>' +
         '<div class="vbtns"><button class="btn green" id="fok">حفظ</button><button class="btn ghost" id="fx">إلغاء</button></div></div>';
       window.scrollTo(0, 0);
       var who = function () { return v ? v.t : document.getElementById('ft').value; };
@@ -1400,7 +1406,10 @@
         $p.innerHTML = '<option value="">جارٍ التحميل…</option>';
         api('visSlots', { t: t, date: d, id: v ? v.id : '' }).then(function (j) {
           if (j.holiday) { $p.innerHTML = '<option value="">' + esc(j.day) + ' إجازة</option>'; return; }
+          if (j.early) { $p.innerHTML = '<option value="">أقرب موعد ' + esc(j.minDate) + ' (إبلاغ قبل أسبوع)</option>'; return; }
+          if (j.full) { $p.innerHTML = '<option value="">اكتمل الحد: زيارتان في هذا اليوم</option>'; return; }
           $p.innerHTML = j.lessons.length ? '<option value="">— اختر —</option>' + j.lessons.map(function (l) {
+            if (l.no) return '<option value="" disabled>الحصة ' + l.p + ' – ' + esc(l.c) + ' (الأولى/الأخيرة لا تُزار)</option>';
             return '<option value="' + l.p + '"' + (v && v.p === l.p && v.date.replace(/\//g, '-') === d ? ' selected' : '') + '>الحصة ' + l.p + ' – ' + esc(l.c) + ' – ' + esc(l.s) + (l.busy ? ' (فيها زيارة لـ ' + esc(l.busy) + ')' : '') + '</option>';
           }).join('') : '<option value="">لا حصص له يوم ' + esc(j.day) + '</option>';
         }).catch(function (e) { $p.innerHTML = '<option value="">' + esc(e.message) + '</option>'; });
@@ -1420,6 +1429,75 @@
     document.getElementById('vm').onchange = function () { month = this.value || month; load(); };
     document.getElementById('t1').onclick = function () { tab = 'agenda'; if (VS.data) draw(); };
     document.getElementById('t2').onclick = function () { tab = 'sum'; if (VS.data) draw(); };
+    document.getElementById('t3').onclick = function () { tab = 'walk'; if (VS.data) draw(); };
+    // الجولة اليومية: زيارات تجوالية قصيرة بدون إبلاغ مسبق
+    var WK = { date: todayISO(), data: null };
+    function walkView() {
+      $l.innerHTML = '<div class="card"><label class="q">تاريخ الجولة</label><input type="date" id="wd" value="' + WK.date + '">' +
+        '<p class="help" style="margin:6px 0 0">جولة قصيرة (5–10 دقائق) بدون إبلاغ مسبق. اختر من المقترح أو من حصص اليوم، وقيّم 6 بنود سريعة.</p></div><div id="wform"></div><div id="wbody"><div class="loading">جارٍ التحميل…</div></div>';
+      document.getElementById('wd').onchange = function () { WK.date = this.value || WK.date; walkLoad(); };
+      walkLoad();
+    }
+    function walkLoad() {
+      var $b = document.getElementById('wbody'); if (!$b) return;
+      $b.innerHTML = '<div class="loading">جارٍ التحميل…</div>';
+      api('visWalk', { date: WK.date }).then(function (j) { WK.data = j; walkDraw(); })
+        .catch(function (e) { if (e.auth) return logout(true); $b.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; });
+    }
+    function walkDraw() {
+      var j = WK.data, $b = document.getElementById('wbody'); if (!$b) return;
+      if (j.holiday) { $b.innerHTML = '<div class="warnbox">' + esc(j.day) + ' إجازة أو عطلة نهاية الأسبوع.</div>'; return; }
+      var lbtn = function (x) { return '<button class="btn small ghost" data-wp="' + x.p + '" data-wt="' + esc(x.t) + '">ح' + x.p + ' · ' + esc(x.c) + ' · ' + esc(x.t) + '</button>'; };
+      var html = '';
+      html += '<div class="card"><b>🎯 مقترح جولة ' + esc(j.day) + '</b> <small class="vm">(الأقل زيارة تجوالية مؤخراً)</small><div class="wles">' +
+        (j.suggest.length ? j.suggest.map(lbtn).join('') : '<span class="vm">لا مقترحات</span>') + '</div>';
+      var byP = {}; j.lessons.forEach(function (x) { (byP[x.p] = byP[x.p] || []).push(x); });
+      html += Object.keys(byP).sort(function (a, b) { return a - b; }).map(function (p) {
+        return '<details class="wp"><summary>الحصة ' + p + ' (' + byP[p].length + ')</summary><div class="wles">' + byP[p].map(lbtn).join('') + '</div></details>';
+      }).join('') + '</div>';
+      html += '<h3>✅ جولات ' + esc(j.day + ' ' + j.date) + ' (' + j.done.length + ')</h3>';
+      html += j.done.length ? j.done.map(function (o) {
+        return '<div class="vcard done"><div class="vrow"><div><div class="vt">الحصة ' + o.p + ' · ' + esc(o.c) + ' · أ. ' + esc(o.t) + '</div><div class="vm">' + esc(o.s) + (o.by ? ' · ' + esc(o.by) : '') + '</div>' +
+          (o.str ? '<div class="vm">📝 ' + esc(o.str) + '</div>' : '') + (o.mailed ? '<div class="vm">📧 أُرسلت للمعلم</div>' : '') + '</div><span class="chip ok">' + o.pct + '%</span></div>' +
+          '<div class="vbtns"><button class="btn small ghost" data-we="' + esc(o.id) + '">✏️ تعديل</button>' + (o.mailed ? '' : '<button class="btn small" data-wm="' + esc(o.id) + '">📧 إرسال الملاحظات للمعلم</button>') +
+          '<button class="btn small ghost" data-wx="' + esc(o.id) + '">🗑</button></div></div>';
+      }).join('') : '<p class="vm">لا توجد جولات مسجلة في هذا اليوم.</p>';
+      $b.innerHTML = html;
+      $b.querySelectorAll('[data-wp]').forEach(function (b) { b.onclick = function () { walkForm({ p: +b.dataset.wp, t: b.dataset.wt }); }; });
+      $b.querySelectorAll('[data-we]').forEach(function (b) { b.onclick = function () { walkForm(j.done.filter(function (o) { return o.id === b.dataset.we; })[0]); }; });
+      $b.querySelectorAll('[data-wx]').forEach(function (b) { b.onclick = function () { if (!confirm('حذف هذه الجولة؟')) return; api('visDel', { id: b.dataset.wx }).then(function () { toast('تم الحذف'); walkLoad(); }).catch(function (e) { toast(e.message); }); }; });
+      $b.querySelectorAll('[data-wm]').forEach(function (b) {
+        b.onclick = function () {
+          if (!confirm('إرسال ملاحظات الجولة إلى بريد المعلم؟')) return; b.disabled = true;
+          api('visWalkMail', { id: b.dataset.wm }, 60000).then(function (r) { toast('أُرسلت إلى ' + r.to + ' ✓', 4000); walkLoad(); }).catch(function (e) { b.disabled = false; toast(e.message, 5000); });
+        };
+      });
+    }
+    function walkForm(o) {
+      var j = WK.data, L = j.lessons.filter(function (x) { return x.p === o.p && x.t === o.t; })[0] || o, sc = Object.assign({}, o.scores || {});
+      var $f = document.getElementById('wform');
+      $f.innerHTML = '<div class="vbox"><b>🚶 جولة: الحصة ' + L.p + ' · ' + esc(L.c || '') + ' · أ. ' + esc(L.t) + '</b><div class="vm">' + esc(L.s || '') + '</div>' +
+        j.items.map(function (w) {
+          return '<div class="vitem"><div class="q">' + esc(w[1]) + '</div><div class="wsc" data-w="' + w[0] + '">' +
+            [[2, '✔ متحقق'], [1, '◐ جزئياً'], [0, '✘ غير متحقق']].map(function (k) { return '<button type="button" class="k' + k[0] + (sc[w[0]] === k[0] ? ' on' : '') + '" data-k="' + k[0] + '">' + k[1] + '</button>'; }).join('') + '</div></div>';
+        }).join('') +
+        '<label class="q">ملاحظة سريعة</label><textarea id="wnote" style="min-height:60px">' + esc(o.str || '') + '</textarea>' +
+        '<div class="vbtns"><button class="btn green" id="wok">💾 حفظ الجولة</button><button class="btn ghost" id="wx">إلغاء</button></div></div>';
+      $f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      $f.querySelectorAll('.wsc button').forEach(function (b) {
+        b.onclick = function () { var w = b.parentNode.dataset.w, k = +b.dataset.k; if (sc[w] === k) delete sc[w]; else sc[w] = k;
+          b.parentNode.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', sc[w] === +x.dataset.k); }); };
+      });
+      document.getElementById('wx').onclick = function () { $f.innerHTML = ''; };
+      document.getElementById('wok').onclick = function () {
+        if (!Object.keys(sc).length) return toast('قيّم بنداً واحداً على الأقل');
+        var b = this; b.disabled = true;
+        api('visWalkSave', o.id ? { id: o.id, scores: sc, note: document.getElementById('wnote').value } : { date: WK.date, t: L.t, p: L.p, scores: sc, note: document.getElementById('wnote').value })
+          .then(function () { $f.innerHTML = ''; toast('تم حفظ الجولة ✓'); walkLoad(); })
+          .catch(function (e) { b.disabled = false; toast(e.message, 5000); });
+      };
+    }
+
     document.getElementById('vadd').onclick = function () { slotForm(null); };
     document.getElementById('vplan').onclick = function () {
       var b = this; b.disabled = true; b.textContent = 'جارٍ إنشاء الأجندة…';
